@@ -19,6 +19,15 @@ except ImportError:
 import openpyxl
 
 app = Flask(__name__, static_folder=None)
+
+# CORS — allow access from GitHub Pages and any origin
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    return response
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, 'data.json')
 PORT = int(os.environ.get('PORT', 8888))
