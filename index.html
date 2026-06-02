@@ -357,6 +357,7 @@ if (typeof ChartDataLabels !== 'undefined') {
 Chart.defaults.plugins.datalabels = { display: false };
 
 // ==================== GLOBAL STATE ====================
+const DATA_VERSION = 2; // bump to invalidate old cached data
 let appData = { '2025': null, '2026': null };
 let currentYear = '2026';
 let monthlyChart = null, bizUnitChart = null, categoryChart = null;
@@ -426,15 +427,36 @@ function loadFromStorage() {
     const raw = localStorage.getItem('midea_dashboard_data');
     if (raw) {
       const stored = JSON.parse(raw);
-      if (stored['2025']) appData['2025'] = stored['2025'];
-      if (stored['2026']) appData['2026'] = stored['2026'];
+      // Version check — discard data from old incompatible versions
+      if (stored._version !== DATA_VERSION) {
+        console.warn('Cached data version mismatch (' + stored._version + ' vs ' + DATA_VERSION + '), clearing');
+        localStorage.removeItem('midea_dashboard_data');
+        return;
+      }
+      // Validate data structure
+      let valid = false;
+      for (const year of ['2025', '2026']) {
+        if (stored[year] && stored[year].dailyData && Array.isArray(stored[year].dailyData) && stored[year].dailyData.length > 0) {
+          appData[year] = stored[year];
+          valid = true;
+        }
+      }
+      if (!valid) {
+        console.warn('Cached data invalid, clearing');
+        localStorage.removeItem('midea_dashboard_data');
+      }
     }
-  } catch(e) { console.warn('localStorage load failed', e); }
+  } catch(e) {
+    console.warn('localStorage load failed, clearing', e);
+    localStorage.removeItem('midea_dashboard_data');
+  }
 }
 
 function saveToStorage() {
   try {
-    localStorage.setItem('midea_dashboard_data', JSON.stringify(appData));
+    const toSave = { _version: DATA_VERSION };
+    for (const y of ['2025', '2026']) { if (appData[y]) toSave[y] = appData[y]; }
+    localStorage.setItem('midea_dashboard_data', JSON.stringify(toSave));
   } catch(e) { showToast('存储空间不足，请清理旧数据'); }
 }
 
@@ -501,12 +523,14 @@ function handleFileUpload(e) {
       const totalAb = Object.values(parsed).reduce((s, p) => s + (p.abnormalRecords ? p.abnormalRecords.length : 0), 0);
       showToast(`数据更新成功！${years.join('、')} 年，${totalDays} 天记录，${totalAb} 条异常`);
     } catch(err) {
-      console.error(err);
-      showToast('文件解析失败：' + err.message);
+      console.error('Upload parse error:', err);
+      console.error('Error stack:', err.stack);
+      showToast('文件解析失败：' + (err.message || '未知错误，请查看控制台（F12）'));
     }
   };
-  reader.onerror = function() {
-    showToast('文件读取失败，请重试');
+  reader.onerror = function(ev) {
+    console.error('FileReader error:', reader.error);
+    showToast('文件读取失败：' + (reader.error ? reader.error.message : '请重试'));
   };
   reader.readAsArrayBuffer(file);
   e.target.value = '';
@@ -757,7 +781,9 @@ function renderCharts(data) {
     releasedByMonth.push(monthlyMap[m] ? monthlyMap[m].released : 0);
   }
 
-  const ctx = document.getElementById('chartMonthly').getContext('2d');
+  const canvasEl = document.getElementById('chartMonthly');
+  if (!canvasEl) return;
+  const ctx = canvasEl.getContext('2d');
   monthlyChart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -827,7 +853,9 @@ function renderAnalysis(data) {
   const maxBiz = bizSorted[0] ? bizSorted[0][1] : 1;
 
   const totalBiz = bizSorted.reduce((s, [,v]) => s + v, 0);
-  const ctx1 = document.getElementById('chartBizUnit').getContext('2d');
+  const canvas1 = document.getElementById('chartBizUnit');
+  if (!canvas1) return;
+  const ctx1 = canvas1.getContext('2d');
   bizUnitChart = new Chart(ctx1, {
     type: 'bar',
     data: {
@@ -885,7 +913,9 @@ function renderAnalysis(data) {
   const catColors = ['#ff3b30','#ff9500','#007aff','#34c759','#af52de','#5ac8fa','#8e8e93'];
 
   const totalCat = catEntries.reduce((s, [,v]) => s + v, 0);
-  const ctx2 = document.getElementById('chartCategory').getContext('2d');
+  const canvas2 = document.getElementById('chartCategory');
+  if (!canvas2) return;
+  const ctx2 = canvas2.getContext('2d');
   categoryChart = new Chart(ctx2, {
     type: 'doughnut',
     data: {
