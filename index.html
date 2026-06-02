@@ -416,7 +416,7 @@
     </div>
     <div style="overflow-x:auto;">
       <table class="detail-table">
-        <thead><tr><th style="width:60px">序号</th><th style="width:220px">单号</th><th>未放行原因</th></tr></thead>
+        <thead><tr><th style="width:50px">序号</th><th style="width:170px">单号</th><th style="width:180px">异常描述</th><th>处理进度</th><th style="width:80px">状态</th></tr></thead>
         <tbody id="detailBody"></tbody>
       </table>
     </div>
@@ -1590,17 +1590,45 @@ function showDimensionDetail(idx) {
   document.getElementById('detailPanel').classList.add('show');
 
   if (dim.items.length === 0) {
-    document.getElementById('detailBody').innerHTML = '<tr><td colspan="3" style="text-align:center;padding:40px;color:var(--text-secondary);">无异常记录</td></tr>';
+    document.getElementById('detailBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary);">无异常记录</td></tr>';
     return;
   }
 
-  document.getElementById('detailBody').innerHTML = dim.items.map((item, i) => `
-    <tr>
+  // Cross-reference with abnormal tracking records to show actual descriptions
+  const abRecords = data.abnormalRecords || [];
+  document.getElementById('detailBody').innerHTML = dim.items.map((item, i) => {
+    const matched = findBestMatch(item.id, abRecords);
+    const desc = matched ? matched.description : (item.reason || '—');
+    const progress = matched ? matched.progress : '—';
+    const statusBadge = matched
+      ? (matched.status.includes('未闭环') ? '<span class="badge badge-open">未闭环</span>' : '<span class="badge badge-closed">已闭环</span>')
+      : '<span style="color:var(--text-secondary)">—</span>';
+    return `<tr>
       <td>${i + 1}</td>
-      <td class="mono">${item.id}</td>
-      <td>${item.reason}</td>
-    </tr>
-  `).join('');
+      <td class="mono" style="font-size:12px">${item.id}</td>
+      <td>${desc}</td>
+      <td style="font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(progress)}">${progress || '—'}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function findBestMatch(id, records) {
+  if (!id || records.length === 0) return null;
+  const idLower = id.toLowerCase().trim();
+  // Try exact match first, then partial match
+  for (const r of records) {
+    const bol = (r.bolNo || '').toLowerCase().trim();
+    const customs = (r.customsNo || '').toLowerCase().trim();
+    const container = (r.containerNo || '').toLowerCase().trim();
+    if (bol === idLower || customs === idLower || container === idLower) return r;
+  }
+  for (const r of records) {
+    const bol = (r.bolNo || '').toLowerCase().trim();
+    const customs = (r.customsNo || '').toLowerCase().trim();
+    if (bol.includes(idLower) || customs.includes(idLower) || idLower.includes(bol) || idLower.includes(customs)) return r;
+  }
+  return null;
 }
 
 function closeDetail() {
