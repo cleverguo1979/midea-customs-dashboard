@@ -224,14 +224,7 @@ def upload():
 
 
 if __name__ == '__main__':
-    ip = socket.gethostbyname(socket.gethostname())
-    print()
-    print("  ╔══════════════════════════════════════════╗")
-    print("  ║    📊 美的业务关务看板 — API 服务器     ║")
-    print("  ╠══════════════════════════════════════════╣")
-    print(f"  ║  本机: http://localhost:{PORT}           ║")
-    print(f"  ║  局域网: http://{ip}:{PORT}        ║")
-    print(f"  ║  API:   http://{ip}:{PORT}/api/data    ║")
-    print("  ╚══════════════════════════════════════════╝")
-    print()
-    app.run(host='0.0.0.0', port=PORT, debug=False)
+    import os
+    port = int(os.environ.get('PORT', 8888))
+    print(f"Starting server on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
