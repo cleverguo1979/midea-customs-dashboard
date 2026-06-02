@@ -393,6 +393,7 @@
   <!-- Data Status -->
   <div class="data-status" id="dataStatus">
     <span><span class="dot empty" id="statusDot"></span><span id="statusText">暂无数据，请口岸单位上传 Excel 报表</span></span>
+    <span id="syncHint" style="display:none"></span>
     <span id="statusExtra"></span>
   </div>
 
@@ -510,6 +511,19 @@ function loadTokens() {
   } catch(e) { apiKey = ''; ghToken = ''; }
   const btn = document.getElementById('btnSettings');
   if (btn) btn.classList.toggle('has-key', !!(apiKey || ghToken));
+  // Show sync status warning if no token configured
+  updateSyncHint();
+}
+
+function updateSyncHint() {
+  const hint = document.getElementById('syncHint');
+  if (!hint) return;
+  if (!ghToken) {
+    hint.style.display = '';
+    hint.innerHTML = '⚠️ 未配置云端同步，上传的数据仅本机可见。<a href="#" onclick="openSettings();return false" style="color:var(--accent);font-weight:600">点击配置</a>';
+  } else {
+    hint.style.display = 'none';
+  }
 }
 
 function saveTokens(aiKey, ghKey) {
@@ -522,6 +536,7 @@ function saveTokens(aiKey, ghKey) {
   const btn = document.getElementById('btnSettings');
   if (btn) btn.classList.toggle('has-key', !!(apiKey || ghToken));
   aiCache = null;
+  updateSyncHint();
 }
 
 async function init() {
@@ -739,10 +754,13 @@ async function handleFileUpload(e) {
         );
       }
 
-      // Push to cloud for shared access
+      // Push to cloud so all visitors share the same data
       const cloudData = {};
       for (const y of ['2025', '2026']) { if (appData[y]) cloudData[y] = appData[y]; else cloudData[y] = null; }
       const pushed = await pushToCloud(cloudData);
+      if (!pushed) {
+        console.warn('Cloud sync failed — data only saved locally');
+      }
 
       // Only refresh data in place
       selectedDim = null;
