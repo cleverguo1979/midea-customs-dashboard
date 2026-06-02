@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>美的业务关务看板</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --card-bg: rgba(255,255,255,0.84);
+    --text: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --accent: #0071e3;
+    --accent-hover: #0077ed;
+    --red: #ff3b30;
+    --orange: #ff9500;
+    --green: #34c759;
+    --blue: #007aff;
+    --teal: #5ac8fa;
+    --purple: #af52de;
+    --separator: #e5e5ea;
+    --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+    --shadow-md: 0 8px 32px rgba(0,0,0,0.08);
+    --shadow-lg: 0 20px 60px rgba(0,0,0,0.12);
+    --radius-sm: 12px;
+    --radius: 20px;
+    --radius-lg: 24px;
+    --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Helvetica Neue', sans-serif;
+    --font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Navbar */
+  .navbar {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(245,245,247,0.82);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--separator);
+    padding: 0 40px; height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .navbar-left { display: flex; align-items: baseline; gap: 16px; }
+  .navbar-title { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .navbar-subtitle { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+  .navbar-right { display: flex; align-items: center; gap: 12px; }
+  .navbar-hint { font-size: 11px; color: var(--text-secondary); text-align: right; line-height: 1.3; }
+  .year-switch { display: flex; background: #e8e8ed; border-radius: 10px; overflow: hidden; }
+  .year-btn { padding: 6px 16px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; background: transparent; color: var(--text-secondary); transition: all 0.15s; }
+  .year-btn.active { background: #fff; color: var(--text); box-shadow: var(--shadow-sm); border-radius: 8px; margin: 2px; }
+  .btn-upload {
+    display: flex; align-items: center; gap: 6px;
+    padding: 9px 20px; font-size: 14px; font-weight: 600;
+    background: var(--accent); color: #fff; border: none; border-radius: var(--radius-sm);
+    cursor: pointer; transition: all 0.2s; letter-spacing: -0.1px;
+  }
+  .btn-upload:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,113,227,0.35); }
+  .btn-upload svg { width: 16px; height: 16px; }
+
+  /* Main Container */
+  .main { max-width: 1440px; margin: 0 auto; padding: 32px 40px 60px; }
+
+  /* KPI Cards */
+  .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 18px; margin-bottom: 28px; }
+  .kpi-card {
+    background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius); padding: 22px 24px;
+    box-shadow: var(--shadow-sm); border: 1px solid rgba(255,255,255,0.6);
+    transition: all 0.25s; cursor: default;
+  }
+  .kpi-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+  .kpi-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .kpi-value { font-size: 36px; font-weight: 700; letter-spacing: -1px; line-height: 1.1; }
+  .kpi-change { font-size: 12px; margin-top: 6px; color: var(--text-secondary); }
+  .kpi-change.down { color: var(--red); }
+  .kpi-card.alert .kpi-value { color: var(--red); }
+  .kpi-card.alert { border-left: 4px solid var(--red); }
+  .kpi-value.empty { color: #c7c7cc; font-size: 28px; }
+
+  /* Data Status Bar */
+  .data-status {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 18px; margin-bottom: 24px;
+    background: rgba(0,113,227,0.06); border-radius: 12px;
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .data-status .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .data-status .dot.loaded { background: var(--green); }
+  .data-status .dot.empty { background: #c7c7cc; }
+
+  /* Charts */
+  .chart-row { margin-bottom: 28px; }
+  .chart-card {
+    background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius); padding: 28px;
+    box-shadow: var(--shadow-sm); border: 1px solid rgba(255,255,255,0.6);
+    position: relative;
+  }
+  .chart-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 20px; letter-spacing: -0.2px; }
+  .chart-wrap { position: relative; width: 100%; height: 300px; }
+  .chart-empty {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: #c7c7cc; font-size: 14px;
+  }
+
+  /* Analysis Section */
+  .analysis-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-bottom: 28px; }
+  .analysis-card {
+    background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius); padding: 24px;
+    box-shadow: var(--shadow-sm); border: 1px solid rgba(255,255,255,0.6);
+    position: relative;
+  }
+  .analysis-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; letter-spacing: -0.2px; }
+  .analysis-chart-wrap { position: relative; width: 100%; height: 280px; }
+  .rank-list { list-style: none; }
+  .rank-list li { display: flex; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f2; font-size: 13px; gap: 10px; }
+  .rank-list .rank-num { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .rank-list .rank-num.top { background: var(--red); }
+  .rank-list .rank-num.mid { background: var(--orange); }
+  .rank-list .rank-name { flex: 1; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rank-list .rank-val { font-weight: 700; font-family: var(--font-mono); color: var(--text-secondary); min-width: 32px; text-align: right; }
+  .rank-list .rank-bar-wrap { flex: 1.5; height: 8px; background: #e8e8ed; border-radius: 4px; overflow: hidden; min-width: 30px; align-self: center; }
+  .rank-list .rank-bar { display: block; height: 8px; min-width: 2px; border-radius: 4px; background: var(--accent); transition: width 0.5s; }
+
+  /* Section */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .section-title { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  .section-badge { font-size: 13px; color: var(--text-secondary); background: #e8e8ed; padding: 4px 12px; border-radius: 20px; font-weight: 500; }
+
+  /* Dimension Cards */
+  .dimension-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 28px; }
+  .dim-card {
+    background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius); padding: 24px; cursor: pointer;
+    box-shadow: var(--shadow-sm); border: 1px solid rgba(255,255,255,0.6);
+    transition: all 0.25s;
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+  }
+  .dim-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+  .dim-card.selected { border: 2px solid var(--accent); box-shadow: 0 0 0 4px rgba(0,113,227,0.12); }
+  .dim-icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; font-size: 22px; }
+  .dim-icon.air { background: #e8f4fd; color: #007aff; }
+  .dim-icon.barge { background: #e2f2e8; color: #34c759; }
+  .dim-icon.ship { background: #e8edfb; color: #5856d6; }
+  .dim-icon.road { background: #fef0e3; color: #ff9500; }
+  .dim-icon.inspect { background: #fde8e8; color: #ff3b30; }
+  .dim-name { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .dim-count { font-size: 40px; font-weight: 700; letter-spacing: -1px; }
+  .dim-desc { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
+
+  /* Detail Panel */
+  .detail-panel {
+    background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius); box-shadow: var(--shadow-md); border: 1px solid rgba(255,255,255,0.6);
+    margin-bottom: 28px; overflow: hidden; display: none;
+  }
+  .detail-panel.show { display: block; }
+  .detail-header { padding: 20px 28px; border-bottom: 1px solid var(--separator); display: flex; justify-content: space-between; align-items: center; }
+  .detail-header h3 { font-size: 16px; font-weight: 600; }
+  .detail-close { width: 32px; height: 32px; border-radius: 50%; border: none; background: #e8e8ed; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+  .detail-close:hover { background: #d1d1d6; }
+  .detail-table { width: 100%; border-collapse: collapse; }
+  .detail-table th { text-align: left; padding: 12px 28px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--separator); background: rgba(245,245,247,0.6); }
+  .detail-table td { padding: 14px 28px; font-size: 14px; border-bottom: 1px solid #f0f0f2; vertical-align: top; }
+  .detail-table tr:hover td { background: rgba(0,113,227,0.03); }
+  .detail-table .mono { font-family: var(--font-mono); font-size: 13px; }
+
+  /* Filter */
+  .filter-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+  .filter-select, .filter-input {
+    padding: 9px 14px; font-size: 13px; border: 1px solid #d1d1d6; border-radius: 10px;
+    background: #fff; font-family: var(--font); color: var(--text);
+    transition: all 0.15s; outline: none;
+  }
+  .filter-select:focus, .filter-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.12); }
+  .filter-input { width: 220px; }
+  .filter-input::placeholder { color: #aeaeb2; }
+
+  /* Table */
+  .table-card {
+    background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid rgba(255,255,255,0.6);
+    overflow: hidden; margin-bottom: 28px;
+  }
+  .table-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+  .data-table { width: 100%; border-collapse: collapse; min-width: 1160px; table-layout: fixed; }
+  .data-table th {
+    text-align: left; padding: 14px 16px; font-size: 11px; font-weight: 600;
+    color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--separator); background: rgba(245,245,247,0.8);
+    position: sticky; top: 0; z-index: 2; cursor: pointer; user-select: none;
+  }
+  .data-table th:hover { color: var(--text); }
+  .data-table th .sort-arrow { margin-left: 4px; font-size: 10px; opacity: 0.4; }
+  .data-table th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+  .data-table td { padding: 10px 12px; font-size: 12px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; white-space: nowrap; }
+  .data-table td.wrap { white-space: normal; }
+  .data-table tr:hover td { background: rgba(0,113,227,0.025); }
+  .data-table tr.expanded td { background: rgba(0,113,227,0.04); }
+  .data-table .ellipsis { max-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-closed { background: #e2f2e8; color: #1b8c3c; }
+  .badge-open { background: #fde8e8; color: #c41515; }
+  .badge-cat { background: #e8edfb; color: #3d5fc9; }
+  .badge-cat-inspect { background: #fef0e3; color: #c46a0a; }
+  .badge-cat-other { background: #f0e8f8; color: #6d3daf; }
+  .expand-btn { cursor: pointer; color: var(--accent); font-size: 12px; font-weight: 500; background: none; border: none; white-space: nowrap; }
+  .expand-btn:hover { text-decoration: underline; }
+  .expand-detail { padding: 16px; background: rgba(245,245,247,0.5); font-size: 13px; line-height: 1.8; white-space: pre-wrap; color: var(--text-secondary); border-top: 1px solid var(--separator); }
+
+  /* Summary Bar */
+  .summary-bar { display: flex; gap: 24px; padding: 18px 28px; border-bottom: 1px solid var(--separator); flex-wrap: wrap; }
+  .summary-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .summary-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .summary-num { font-weight: 700; font-family: var(--font-mono); }
+
+  /* Footer */
+  .footer { text-align: center; padding: 20px; font-size: 12px; color: #aeaeb2; border-top: 1px solid var(--separator); margin-top: 40px; }
+
+  /* Toast */
+  .toast {
+    position: fixed; top: 84px; right: 40px; z-index: 999;
+    background: #1d1d1f; color: #fff; padding: 14px 24px; border-radius: 14px;
+    font-size: 14px; font-weight: 500; box-shadow: var(--shadow-lg);
+    opacity: 0; transform: translateY(-10px); transition: all 0.3s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  @media (max-width: 1200px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    .analysis-row { grid-template-columns: 1fr 1fr; }
+    .dimension-row { grid-template-columns: repeat(3, 1fr); }
+    .navbar { padding: 0 20px; }
+    .main { padding: 24px 20px; }
+  }
+  @media (max-width: 768px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .dimension-row { grid-template-columns: repeat(2, 1fr); }
+    .kpi-value { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="navbar-left">
+    <span class="navbar-title">美的业务关务看板</span>
+    <span class="navbar-subtitle" id="navDateRange">—</span>
+  </div>
+  <div class="navbar-right">
+    <div class="navbar-hint" id="navHint">口岸单位请上传<br>Excel 更新数据 →</div>
+    <div class="year-switch">
+      <button class="year-btn" data-year="2025">2025</button>
+      <button class="year-btn active" data-year="2026">2026</button>
+    </div>
+    <button class="btn-upload" id="btnUpload" title="口岸单位上传Excel更新数据">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      上传数据
+    </button>
+  </div>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<div class="main" id="mainContent">
+  <!-- Data Status -->
+  <div class="data-status" id="dataStatus">
+    <span><span class="dot empty" id="statusDot"></span><span id="statusText">暂无数据，请口岸单位上传 Excel 报表</span></span>
+    <span id="statusExtra"></span>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <!-- Charts -->
+  <div class="chart-row">
+    <div class="chart-card">
+      <h3>📊 每月业务量统计</h3>
+      <div class="chart-wrap"><canvas id="chartMonthly"></canvas></div>
+      <div class="chart-empty" id="chartMonthlyEmpty" style="display:none">暂无数据</div>
+    </div>
+  </div>
+
+  <!-- Uncleared Follow-up -->
+  <div class="section-header">
+    <span class="section-title">⚠️ 未放行异常跟进</span>
+    <span class="section-badge" id="unclearedDate">—</span>
+  </div>
+  <div class="dimension-row" id="dimensionRow"></div>
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+      <h3 id="detailTitle">明细</h3>
+      <button class="detail-close" id="detailClose">✕</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="detail-table">
+        <thead><tr><th style="width:60px">序号</th><th style="width:220px">单号</th><th>未放行原因</th></tr></thead>
+        <tbody id="detailBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Abnormal Tracking Table -->
+  <div class="section-header">
+    <span class="section-title">📋 异常跟踪表</span>
+    <span class="section-badge" id="abnormalCount">共 0 条</span>
+  </div>
+  <div class="table-card">
+    <div class="summary-bar" id="summaryBar"></div>
+    <div class="filter-bar" id="filterBar"></div>
+    <div class="table-wrap">
+      <table class="data-table" id="abnormalTable">
+        <thead id="abnormalTableHead"></thead>
+        <tbody id="abnormalTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Business Analysis -->
+  <div class="analysis-row" id="analysisRow">
+    <div class="analysis-card">
+      <h3>🏢 事业部异常排行</h3>
+      <div class="analysis-chart-wrap"><canvas id="chartBizUnit"></canvas></div>
+    </div>
+    <div class="analysis-card">
+      <h3>📋 异常类别分布</h3>
+      <div class="analysis-chart-wrap"><canvas id="chartCategory"></canvas></div>
+    </div>
+    <div class="analysis-card" id="responsibleCard">
+      <h3>🎯 责任方分析</h3>
+      <ul class="rank-list" id="responsibleRank"></ul>
+    </div>
+  </div>
+
+  <div class="footer" id="footer"></div>
+</div>
+
+<input type="file" id="hiddenFileInput" accept=".xlsx,.xls" style="display:none">
+
+<script>
+// Register and disable datalabels plugin globally — enable per chart as needed
+if (typeof ChartDataLabels !== 'undefined') {
+  Chart.register(ChartDataLabels);
+}
+Chart.defaults.plugins.datalabels = { display: false };
+
+// ==================== GLOBAL STATE ====================
+let appData = { '2025': null, '2026': null };
+let currentYear = '2026';
+let monthlyChart = null, bizUnitChart = null, categoryChart = null;
+let selectedDim = null;
+let abnormalRecords = [];
+let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
+let abnormalSort = { field: null, asc: true };
+
+// ==================== DATE UTILS ====================
+// Standard Excel serial → JS Date (works across timezones)
+function excelSerialToDate(serial) {
+  // Excel serial 1 = Jan 1, 1900; Unix epoch = 25569 (Jan 1, 1970)
+  return new Date((serial - 25569) * 86400000);
+}
+
+// ==================== INIT ====================
+function init() {
+  loadFromStorage();
+  // Always show the dashboard — with or without data
+  renderAll();
+  bindEvents();
+
+  // Auto-load sample data on first visit if no data in storage
+  if (!appData['2025'] && !appData['2026']) {
+    autoLoadSampleData();
+  }
+}
+
+function autoLoadSampleData() {
+  showToast('正在加载演示数据...');
+  // Try the Excel file in the same directory
+  fetch(encodeURI('华东口岸申报日报关情况 6.1.xlsx'))
+    .then(r => {
+      if (!r.ok) throw new Error('文件未找到');
+      return r.arrayBuffer();
+    })
+    .then(buf => {
+      const wb = XLSX.read(buf, { type: 'array' });
+      const parsed = parseWorkbook(wb);
+      if (!parsed || Object.keys(parsed).length === 0) {
+        showToast('演示数据解析失败');
+        return;
+      }
+      for (const year in parsed) {
+        appData[year] = parsed[year];
+      }
+      saveToStorage();
+      // Switch to most recent year
+      const years = Object.keys(appData).filter(y => appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0).sort();
+      if (years.length > 0) {
+        currentYear = years[years.length - 1];
+        document.querySelectorAll('.year-btn').forEach(b => b.classList.toggle('active', b.dataset.year === currentYear));
+      }
+      renderAll();
+      const totalDays = Object.values(appData).reduce((s, p) => s + (p && p.dailyData ? p.dailyData.length : 0), 0);
+      const totalAb = Object.values(appData).reduce((s, p) => s + (p && p.abnormalRecords ? p.abnormalRecords.length : 0), 0);
+      showToast(`演示数据已加载（${totalDays} 天，${totalAb} 条异常）`);
+    })
+    .catch(err => {
+      console.warn('Auto-load skipped:', err.message);
+      showToast('未找到演示数据文件，请手动上传 Excel');
+    });
+}
+
+function loadFromStorage() {
+  try {
+    const raw = localStorage.getItem('midea_dashboard_data');
+    if (raw) {
+      const stored = JSON.parse(raw);
+      if (stored['2025']) appData['2025'] = stored['2025'];
+      if (stored['2026']) appData['2026'] = stored['2026'];
+    }
+  } catch(e) { console.warn('localStorage load failed', e); }
+}
+
+function saveToStorage() {
+  try {
+    localStorage.setItem('midea_dashboard_data', JSON.stringify(appData));
+  } catch(e) { showToast('存储空间不足，请清理旧数据'); }
+}
+
+// ==================== EVENTS ====================
+function bindEvents() {
+  document.getElementById('btnUpload').addEventListener('click', () => {
+    document.getElementById('hiddenFileInput').click();
+  });
+  document.getElementById('hiddenFileInput').addEventListener('change', handleFileUpload);
+  document.getElementById('detailClose').addEventListener('click', closeDetail);
+  document.querySelectorAll('.year-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchYear(btn.dataset.year));
+  });
+}
+
+// ==================== FILE UPLOAD & PARSE ====================
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  showToast('正在解析文件...');
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'array' });
+      const parsed = parseWorkbook(wb);
+      if (!parsed || Object.keys(parsed).length === 0) {
+        showToast('未在文件中找到有效数据');
+        return;
+      }
+
+      // Merge into appData
+      for (const year in parsed) {
+        if (appData[year] && appData[year].dailyData) {
+          const existingDates = new Set(appData[year].dailyData.map(d => d.date));
+          const newDaily = parsed[year].dailyData.filter(d => !existingDates.has(d.date));
+          appData[year].dailyData = [...appData[year].dailyData, ...newDaily]
+            .sort((a, b) => a.date.localeCompare(b.date));
+        } else {
+          appData[year] = parsed[year];
+        }
+        // Abnormal records: always replace (latest upload is authoritative)
+        if (parsed[year].abnormalRecords && parsed[year].abnormalRecords.length > 0) {
+          appData[year].abnormalRecords = parsed[year].abnormalRecords;
+        }
+      }
+
+      saveToStorage();
+
+      // Auto-switch to the year with the most recent data
+      const years = Object.keys(appData).filter(y => appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0).sort();
+      if (years.length > 0) {
+        currentYear = years[years.length - 1];
+        document.querySelectorAll('.year-btn').forEach(b =>
+          b.classList.toggle('active', b.dataset.year === currentYear)
+        );
+      }
+
+      // Only refresh data in place — don't rebuild DOM
+      selectedDim = null;
+      document.getElementById('detailPanel').classList.remove('show');
+      renderAll();
+
+      const totalDays = Object.values(parsed).reduce((s, p) => s + (p.dailyData ? p.dailyData.length : 0), 0);
+      const totalAb = Object.values(parsed).reduce((s, p) => s + (p.abnormalRecords ? p.abnormalRecords.length : 0), 0);
+      showToast(`数据更新成功！${years.join('、')} 年，${totalDays} 天记录，${totalAb} 条异常`);
+    } catch(err) {
+      console.error(err);
+      showToast('文件解析失败：' + err.message);
+    }
+  };
+  reader.onerror = function() {
+    showToast('文件读取失败，请重试');
+  };
+  reader.readAsArrayBuffer(file);
+  e.target.value = '';
+}
+
+function parseWorkbook(wb) {
+  const sheetNames = wb.SheetNames;
+
+  const dailySheetNames = sheetNames.filter(n => n.includes('日报关情况'));
+  const abnormalSheetNames = sheetNames.filter(n => n.includes('异常跟踪表'));
+  const mappingSheetName = sheetNames.find(n => n === 'Sheet3' || n.includes('映射'));
+
+  if (dailySheetNames.length === 0) throw new Error('未找到"日报关情况"工作表');
+
+  const allYearsData = {};
+
+  function parseDailySheet(sheetName) {
+    const ws = wb.Sheets[sheetName];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const result = [];
+    for (let i = 2; i < raw.length; i++) {
+      const row = raw[i];
+      if (!row[0] && !row[1]) continue;
+      const dateSerial = Number(row[0]);
+      if (isNaN(dateSerial) || dateSerial < 40000) continue;
+      const totalDeclared = Number(row[1]) || 0;
+      const totalReleased = Number(row[2]) || 0;
+      if (totalDeclared === 0 && totalReleased === 0) continue;
+      const date = excelSerialToDate(dateSerial);
+      result.push({
+        date: date.toISOString().split('T')[0],
+        year: String(date.getFullYear()),
+        month: date.getMonth() + 1,
+        day: date.getDate(),
+        totalDeclared,
+        totalReleased,
+        reviewCompleted: Number(row[3]) || 0,
+        unclearedReason: String(row[4] || '').trim()
+      });
+    }
+    return result;
+  }
+
+  function parseAbnormalSheet(sheetName) {
+    const ws = wb.Sheets[sheetName];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+    const result = [];
+    for (let i = 1; i < raw.length; i++) {
+      const row = raw[i];
+      if (!row[0] && !row[6]) continue;
+      const dateSerial = Number(row[1]);
+      let dateStr = '';
+      if (!isNaN(dateSerial) && dateSerial > 40000) {
+        dateStr = excelSerialToDate(dateSerial).toISOString().split('T')[0];
+      } else {
+        dateStr = String(row[1] || '').trim();
+      }
+      result.push({
+        seq: row[0],
+        date: dateStr,
+        category: String(row[2] || '').trim(),
+        bizUnit: String(row[3] || '').trim(),
+        company: String(row[4] || '').trim(),
+        importExport: String(row[5] || '').trim(),
+        customsNo: String(row[6] || '').trim(),
+        bolNo: String(row[7] || '').trim(),
+        containerNo: String(row[8] || '').trim(),
+        description: String(row[9] || '').trim(),
+        responsible: String(row[10] || '').trim(),
+        fee: String(row[11] || '').trim(),
+        progress: String(row[12] || '').trim(),
+        status: String(row[13] || '').trim(),
+        agent: String(row[14] || '').trim()
+      });
+    }
+    return result;
+  }
+
+  for (const sName of dailySheetNames) {
+    const dailyData = parseDailySheet(sName);
+    if (dailyData.length > 0) {
+      const year = dailyData[0].year;
+      if (!allYearsData[year]) allYearsData[year] = { dailyData: [], abnormalRecords: [], mapping: [] };
+      allYearsData[year].dailyData = [...allYearsData[year].dailyData, ...dailyData];
+    }
+  }
+
+  for (const sName of abnormalSheetNames) {
+    const abRecords = parseAbnormalSheet(sName);
+    if (abRecords.length > 0) {
+      const yearMatch = sName.match(/(\d{4})/);
+      const year = yearMatch ? yearMatch[1] : '2026';
+      if (!allYearsData[year]) allYearsData[year] = { dailyData: [], abnormalRecords: [], mapping: [] };
+      allYearsData[year].abnormalRecords = [...allYearsData[year].abnormalRecords, ...abRecords];
+    }
+  }
+
+  // Mapping
+  let mapping = [];
+  if (mappingSheetName) {
+    const mapWs = wb.Sheets[mappingSheetName];
+    const mapRaw = XLSX.utils.sheet_to_json(mapWs, { header: 1, defval: '' });
+    for (let i = 1; i < mapRaw.length; i++) {
+      const row = mapRaw[i];
+      if (!row[0]) continue;
+      mapping.push({ company: String(row[0]).trim(), bizUnit: String(row[1]).trim(), rep: String(row[2]).trim() });
+    }
+  }
+  for (const year in allYearsData) {
+    allYearsData[year].mapping = mapping;
+  }
+
+  return allYearsData;
+}
+
+// ==================== RENDER ALL ====================
+function renderAll() {
+  const data = appData[currentYear];
+  const hasData = data && data.dailyData && data.dailyData.length > 0;
+
+  updateStatusBar(hasData, data);
+  updateNavbar(data);
+
+  abnormalRecords = (data && data.abnormalRecords) ? data.abnormalRecords : [];
+
+  renderKPIs(data);
+  renderCharts(data);
+  renderAnalysis(data);
+  renderDimensionCards(data);
+  renderAbnormalTable(data);
+  updateFooter(data);
+}
+
+function updateStatusBar(hasData, data) {
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  const extra = document.getElementById('statusExtra');
+  dot.className = 'dot ' + (hasData ? 'loaded' : 'empty');
+  if (hasData) {
+    const latestDate = data.dailyData[data.dailyData.length - 1].date;
+    text.textContent = `数据已加载 · 最新日期 ${latestDate}`;
+    extra.textContent = `${data.dailyData.length} 天记录 | ${(data.abnormalRecords || []).length} 条异常`;
+  } else {
+    text.textContent = `暂无 ${currentYear} 年数据，请口岸单位上传 Excel 报表`;
+    extra.textContent = '上传后自动更新看板';
+  }
+}
+
+function updateNavbar(data) {
+  if (data && data.dailyData && data.dailyData.length > 0) {
+    const d = data.dailyData;
+    document.getElementById('navDateRange').textContent = `${d[0].date} — ${d[d.length-1].date}`;
+  } else {
+    document.getElementById('navDateRange').textContent = '—';
+  }
+  document.getElementById('navHint').style.display = (data && data.dailyData && data.dailyData.length > 0) ? 'none' : '';
+}
+
+// ==================== KPI CARDS ====================
+function renderKPIs(data) {
+  const hasData = data && data.dailyData && data.dailyData.length > 0;
+
+  if (!hasData) {
+    const emptyCards = ['累计申报总单量', '最新日申报单量', '本月申报单量', '当前未放行单量', '未闭环异常数'];
+    document.getElementById('kpiRow').innerHTML = emptyCards.map(label => `
+      <div class="kpi-card">
+        <div class="kpi-label">${label}</div>
+        <div class="kpi-value empty">—</div>
+        <div class="kpi-change">暂无数据</div>
+      </div>
+    `).join('');
+    return;
+  }
+
+  const dailies = data.dailyData;
+  const abnormalRecs = data.abnormalRecords || [];
+
+  const totalDeclared = dailies.reduce((s, d) => s + d.totalDeclared, 0);
+  const latest = dailies[dailies.length - 1];
+
+  const now = new Date();
+  const thisMonth = now.getMonth() + 1;
+  const thisYear = now.getFullYear();
+  const monthDeclared = dailies
+    .filter(d => d.year === String(thisYear) && d.month === thisMonth)
+    .reduce((s, d) => s + d.totalDeclared, 0);
+
+  const unclearedReason = latest.unclearedReason;
+  const unclearedCount = (!unclearedReason || unclearedReason === '无') ? 0 :
+    parseUnclearedDimensions(unclearedReason).reduce((s, dim) => s + dim.count, 0);
+
+  const openCount = abnormalRecs.filter(r =>
+    r.status && (r.status.includes('未闭环') || r.status.includes('未关闭'))
+  ).length;
+
+  const prevMonth = thisMonth === 1 ? 12 : thisMonth - 1;
+  const prevYear = thisMonth === 1 ? thisYear - 1 : thisYear;
+  const prevMonthDeclared = dailies
+    .filter(d => d.year === String(prevYear) && d.month === prevMonth)
+    .reduce((s, d) => s + d.totalDeclared, 0);
+  const monthChange = prevMonthDeclared > 0 ? ((monthDeclared - prevMonthDeclared) / prevMonthDeclared * 100) : null;
+
+  const cards = [
+    { label: '累计申报总单量', value: totalDeclared.toLocaleString(), change: null, alert: false },
+    { label: '最新日申报单量', value: latest.totalDeclared.toLocaleString(), change: `日期 ${latest.date}`, alert: false },
+    { label: '本月申报单量', value: monthDeclared.toLocaleString(), change: monthChange !== null ? `较上月 ${monthChange >= 0 ? '+' : ''}${monthChange.toFixed(1)}%` : '—', alert: false },
+    { label: '当前未放行单量', value: unclearedCount, change: unclearedCount > 0 ? '需跟进处理' : '全部放行', alert: unclearedCount > 0 },
+    { label: '未闭环异常数', value: openCount, change: openCount > 0 ? '需闭环处理' : '全部闭环', alert: openCount > 0 }
+  ];
+
+  document.getElementById('kpiRow').innerHTML = cards.map(c => `
+    <div class="kpi-card${c.alert ? ' alert' : ''}">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-value">${c.value}</div>
+      <div class="kpi-change${c.alert ? ' down' : ''}">${c.change || ''}</div>
+    </div>
+  `).join('');
+}
+
+// ==================== CHARTS ====================
+function renderCharts(data) {
+  const hasData = data && data.dailyData && data.dailyData.length > 0;
+
+  if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
+
+  if (!hasData) {
+    document.getElementById('chartMonthlyEmpty').style.display = 'flex';
+    return;
+  }
+  document.getElementById('chartMonthlyEmpty').style.display = 'none';
+
+  const dailies = data.dailyData;
+
+  // Monthly chart — fixed 1-12 months for the selected year
+  const monthlyMap = {};
+  dailies.forEach(d => {
+    if (d.year !== currentYear) return;
+    if (!monthlyMap[d.month]) monthlyMap[d.month] = { declared: 0, released: 0 };
+    monthlyMap[d.month].declared += d.totalDeclared;
+    monthlyMap[d.month].released += d.totalReleased;
+  });
+
+  const monthLabels = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const declaredByMonth = [];
+  const releasedByMonth = [];
+  for (let m = 1; m <= 12; m++) {
+    declaredByMonth.push(monthlyMap[m] ? monthlyMap[m].declared : 0);
+    releasedByMonth.push(monthlyMap[m] ? monthlyMap[m].released : 0);
+  }
+
+  const ctx = document.getElementById('chartMonthly').getContext('2d');
+  monthlyChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: monthLabels,
+      datasets: [
+        {
+          label: '应申报总单量', data: declaredByMonth,
+          backgroundColor: 'rgba(0,113,227,0.7)', borderRadius: 8, borderSkipped: false,
+          datalabels: {
+            display: true,
+            anchor: 'end', align: 'top', offset: 2,
+            color: '#0071e3', font: { size: 11, weight: '600' },
+            formatter: function(v) { return v > 0 ? v.toLocaleString() : ''; }
+          }
+        },
+        {
+          label: '已放行单量', data: releasedByMonth,
+          backgroundColor: 'rgba(52,199,89,0.7)', borderRadius: 8, borderSkipped: false,
+          datalabels: {
+            display: true,
+            anchor: 'end', align: 'top', offset: 2,
+            color: '#1b8c3c', font: { size: 11, weight: '600' },
+            formatter: function(v) { return v > 0 ? v.toLocaleString() : ''; }
+          }
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 28 } },
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, padding: 20, font: { size: 12 } } },
+        tooltip: { backgroundColor: '#1d1d1f', cornerRadius: 8, padding: 12 }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { grid: { color: '#f0f0f2' }, ticks: { font: { size: 11 } }, grace: '10%' }
+      }
+    }
+  });
+}
+
+// ==================== BUSINESS ANALYSIS ====================
+function renderAnalysis(data) {
+  const records = (data && data.abnormalRecords) ? data.abnormalRecords : [];
+  const hasData = records.length > 0;
+
+  // Destroy old charts
+  if (bizUnitChart) { bizUnitChart.destroy(); bizUnitChart = null; }
+  if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
+
+  if (!hasData) {
+    document.getElementById('analysisRow').querySelectorAll('.analysis-chart-wrap').forEach(el => {
+      el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#c7c7cc;font-size:14px">暂无数据</div>';
+    });
+    document.getElementById('responsibleRank').innerHTML = '<li style="color:#c7c7cc;justify-content:center">暂无数据</li>';
+    return;
+  }
+
+  // 1. 事业部异常排行 (horizontal bar chart)
+  const bizUnitCounts = {};
+  records.forEach(r => {
+    const bu = r.bizUnit || '未知';
+    bizUnitCounts[bu] = (bizUnitCounts[bu] || 0) + 1;
+  });
+  const bizSorted = Object.entries(bizUnitCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const maxBiz = bizSorted[0] ? bizSorted[0][1] : 1;
+
+  const totalBiz = bizSorted.reduce((s, [,v]) => s + v, 0);
+  const ctx1 = document.getElementById('chartBizUnit').getContext('2d');
+  bizUnitChart = new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: bizSorted.map(([k]) => k),
+      datasets: [{
+        label: '异常次数',
+        data: bizSorted.map(([,v]) => v),
+        backgroundColor: bizSorted.map((_, i) =>
+          i === 0 ? 'rgba(255,59,48,0.75)' :
+          i === 1 ? 'rgba(255,149,0,0.75)' :
+          i === 2 ? 'rgba(255,204,0,0.75)' :
+          'rgba(0,113,227,0.55)'
+        ),
+        borderRadius: 6, borderSkipped: false,
+        datalabels: {
+          display: true,
+          anchor: 'end', align: 'end', offset: 2,
+          color: '#1d1d1f', font: { size: 11, weight: '600' },
+          formatter: function(v) {
+            const pct = totalBiz > 0 ? (v / totalBiz * 100).toFixed(1) : 0;
+            return v + ' (' + pct + '%)';
+          }
+        }
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { right: 64 } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: '#1d1d1f', cornerRadius: 8, padding: 12 }
+      },
+      scales: {
+        x: { grid: { color: '#f0f0f2' }, ticks: { font: { size: 11 }, precision: 0 }, grace: '5%' },
+        y: { grid: { display: false }, ticks: { font: { size: 12 } } }
+      }
+    }
+  });
+
+  // 2. 异常类别分布 (donut chart)
+  const catCounts = {};
+  records.forEach(r => {
+    const cat = r.category || '其他';
+    // Normalize categories
+    let key = cat;
+    if (cat.includes('删改单') && cat.includes('退柜')) key = '删改单/退柜';
+    else if (cat.includes('删改单')) key = '删改单';
+    else if (cat.includes('查验')) key = '查验';
+    else if (cat.includes('退柜')) key = '退柜';
+    else key = '其他';
+    catCounts[key] = (catCounts[key] || 0) + 1;
+  });
+  const catEntries = Object.entries(catCounts).sort((a, b) => b[1] - a[1]);
+  const catColors = ['#ff3b30','#ff9500','#007aff','#34c759','#af52de','#5ac8fa','#8e8e93'];
+
+  const totalCat = catEntries.reduce((s, [,v]) => s + v, 0);
+  const ctx2 = document.getElementById('chartCategory').getContext('2d');
+  categoryChart = new Chart(ctx2, {
+    type: 'doughnut',
+    data: {
+      labels: catEntries.map(([k]) => k),
+      datasets: [{
+        data: catEntries.map(([,v]) => v),
+        backgroundColor: catEntries.map((_, i) => catColors[i % catColors.length]),
+        borderWidth: 2, borderColor: '#fff',
+        datalabels: {
+          display: function(ctx) {
+            const pct = ctx.dataset.data[ctx.dataIndex] / totalCat * 100;
+            return pct >= 5;
+          },
+          color: '#fff', font: { size: 12, weight: '700' },
+          formatter: function(v, ctx) {
+            const pct = totalCat > 0 ? (v / totalCat * 100).toFixed(1) : 0;
+            return pct + '%';
+          }
+        }
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { padding: 16, font: { size: 11 }, usePointStyle: true, pointStyleWidth: 8 } },
+        tooltip: {
+          backgroundColor: '#1d1d1f', cornerRadius: 8, padding: 12,
+          callbacks: {
+            label: function(ctx) {
+              const pct = totalCat > 0 ? (ctx.raw / totalCat * 100).toFixed(1) : 0;
+              return ctx.label + ': ' + ctx.raw + ' 次 (' + pct + '%)';
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // 3. 责任方分析 (ranked list)
+  const respCounts = {};
+  records.forEach(r => {
+    const resp = r.responsible || '未知';
+    respCounts[resp] = (respCounts[resp] || 0) + 1;
+  });
+  const respSorted = Object.entries(respCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const maxResp = respSorted[0] ? respSorted[0][1] : 1;
+
+  document.getElementById('responsibleRank').innerHTML = respSorted.map(([name, count], i) => {
+    const cls = i < 3 ? 'top' : 'mid';
+    return `<li>
+      <span class="rank-num ${cls}">${i + 1}</span>
+      <span class="rank-name">${name}</span>
+      <span class="rank-bar-wrap"><span class="rank-bar" style="width:${(count/maxResp*100).toFixed(0)}%"></span></span>
+      <span class="rank-val">${count}</span>
+    </li>`;
+  }).join('');
+}
+
+// ==================== UNCLEARED DIMENSION PARSING ====================
+function parseUnclearedDimensions(reasonStr) {
+  if (!reasonStr || reasonStr === '无') return [];
+
+  const dimensions = [
+    { key: '空运', icon: 'air', emoji: '✈️' },
+    { key: '驳船', icon: 'barge', emoji: '🚢' },
+    { key: '大船', icon: 'ship', emoji: '🛳️' },
+    { key: '公路', icon: 'road', emoji: '🚛' },
+    { key: '查验', icon: 'inspect', emoji: '🔍' }
+  ];
+
+  const result = [];
+  for (let i = 0; i < dimensions.length; i++) {
+    const dim = dimensions[i];
+    const nextDim = dimensions[i + 1];
+
+    // Find start: "key：" or "key:" or "key \n" or "key\n"
+    const startPatterns = [dim.key + '：', dim.key + ':', dim.key + ' \n', dim.key + '\n'];
+    let startIdx = -1;
+    for (const pat of startPatterns) {
+      startIdx = reasonStr.indexOf(pat);
+      if (startIdx !== -1) { startIdx += pat.length; break; }
+    }
+    if (startIdx === -1) { result.push({ ...dim, items: [], count: 0 }); continue; }
+
+    // Find end: next dimension header
+    let endIdx = reasonStr.length;
+    if (nextDim) {
+      const endPatterns = [nextDim.key + '：', nextDim.key + ':', '\n' + nextDim.key + ' ', '\n' + nextDim.key + '\n', nextDim.key + ' \n', nextDim.key + '\n'];
+      for (const pat of endPatterns) {
+        const idx = reasonStr.indexOf(pat, startIdx);
+        if (idx !== -1 && idx < endIdx) endIdx = idx;
+      }
+    }
+
+    const section = reasonStr.substring(startIdx, endIdx).trim();
+    const lines = section.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const items = lines.map(line => {
+      const parts = line.split(/\s+/);
+      return { id: parts[0] || '', reason: parts.slice(1).join(' ') || line };
+    }).filter(item => item.id);
+
+    result.push({ ...dim, items, count: items.length });
+  }
+  return result;
+}
+
+// ==================== DIMENSION CARDS ====================
+function renderDimensionCards(data) {
+  const hasData = data && data.dailyData && data.dailyData.length > 0;
+
+  const icons = { air: '✈️', barge: '🚢', ship: '🛳️', road: '🚛', inspect: '🔍' };
+  const dimDefs = [
+    { key: '空运', icon: 'air' },
+    { key: '驳船', icon: 'barge' },
+    { key: '大船', icon: 'ship' },
+    { key: '公路', icon: 'road' },
+    { key: '查验', icon: 'inspect' }
+  ];
+
+  if (!hasData) {
+    document.getElementById('unclearedDate').textContent = '—';
+    document.getElementById('dimensionRow').innerHTML = dimDefs.map(d => `
+      <div class="dim-card">
+        <div class="dim-icon ${d.icon}">${icons[d.icon]}</div>
+        <div class="dim-name">${d.key}</div>
+        <div class="dim-count" style="color:#c7c7cc">—</div>
+        <div class="dim-desc">暂无数据</div>
+      </div>
+    `).join('');
+    return;
+  }
+
+  const latest = data.dailyData[data.dailyData.length - 1];
+  const dimensions = parseUnclearedDimensions(latest.unclearedReason);
+  document.getElementById('unclearedDate').textContent = `数据日期: ${latest.date}`;
+
+  document.getElementById('dimensionRow').innerHTML = dimensions.map((dim, idx) => `
+    <div class="dim-card${selectedDim === idx ? ' selected' : ''}" data-dim-idx="${idx}" onclick="selectDimension(${idx})">
+      <div class="dim-icon ${dim.icon}">${icons[dim.icon]}</div>
+      <div class="dim-name">${dim.key}</div>
+      <div class="dim-count" style="color:${dim.count > 0 ? (dim.key==='查验'?'var(--red)':'var(--text)') : 'var(--text-secondary)'}">${dim.count}</div>
+      <div class="dim-desc">${dim.count > 0 ? '点击查看明细' : '无异常'}</div>
+    </div>
+  `).join('');
+
+  if (selectedDim !== null && selectedDim < dimensions.length) {
+    showDimensionDetail(selectedDim);
+  }
+}
+
+function selectDimension(idx) {
+  const data = appData[currentYear];
+  if (!data || !data.dailyData || !data.dailyData.length) return;
+  const latest = data.dailyData[data.dailyData.length - 1];
+  const dimensions = parseUnclearedDimensions(latest.unclearedReason);
+  if (idx >= dimensions.length || dimensions[idx].count === 0) return;
+
+  if (selectedDim === idx) { closeDetail(); return; }
+  selectedDim = idx;
+  document.querySelectorAll('.dim-card').forEach((c, i) => c.classList.toggle('selected', i === idx));
+  showDimensionDetail(idx);
+}
+
+function showDimensionDetail(idx) {
+  const data = appData[currentYear];
+  if (!data || !data.dailyData || !data.dailyData.length) return;
+  const latest = data.dailyData[data.dailyData.length - 1];
+  const dimensions = parseUnclearedDimensions(latest.unclearedReason);
+  if (idx >= dimensions.length) return;
+
+  const dim = dimensions[idx];
+  document.getElementById('detailTitle').textContent = `${dim.emoji || ''} ${dim.key} — 未放行明细（${dim.count}条）`;
+  document.getElementById('detailPanel').classList.add('show');
+
+  if (dim.items.length === 0) {
+    document.getElementById('detailBody').innerHTML = '<tr><td colspan="3" style="text-align:center;padding:40px;color:var(--text-secondary);">无异常记录</td></tr>';
+    return;
+  }
+
+  document.getElementById('detailBody').innerHTML = dim.items.map((item, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td class="mono">${item.id}</td>
+      <td>${item.reason}</td>
+    </tr>
+  `).join('');
+}
+
+function closeDetail() {
+  selectedDim = null;
+  document.getElementById('detailPanel').classList.remove('show');
+  document.querySelectorAll('.dim-card').forEach(c => c.classList.remove('selected'));
+}
+
+// ==================== ABNORMAL TABLE ====================
+function renderAbnormalTable(data) {
+  const records = (data && data.abnormalRecords) ? data.abnormalRecords : [];
+  document.getElementById('abnormalCount').textContent = `共 ${records.length} 条`;
+
+  // Summary bar
+  if (records.length === 0) {
+    document.getElementById('summaryBar').innerHTML = '<span style="color:var(--text-secondary);font-size:13px;">暂无异常记录</span>';
+    document.getElementById('filterBar').innerHTML = '';
+    document.getElementById('abnormalTableHead').innerHTML = '';
+    document.getElementById('abnormalTableBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text-secondary);">暂无数据，请上传 Excel 报表</td></tr>';
+    return;
+  }
+
+  const categories = {}, bizUnits = {};
+  let closedCount = 0, openCount = 0;
+  records.forEach(r => {
+    const cat = r.category || '(空)';
+    categories[cat] = (categories[cat] || 0) + 1;
+    const bu = r.bizUnit || '(空)';
+    bizUnits[bu] = (bizUnits[bu] || 0) + 1;
+    if (r.status && (r.status.includes('未闭环') || r.status.includes('未关闭'))) openCount++;
+    else closedCount++;
+  });
+
+  const topCats = Object.entries(categories).sort((a,b) => b[1] - a[1]).slice(0, 6);
+  const topBUs = Object.entries(bizUnits).sort((a,b) => b[1] - a[1]).slice(0, 5);
+  const colors = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5ac8fa'];
+
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="summary-item"><span class="summary-dot" style="background:var(--green)"></span>已闭环 <span class="summary-num">${closedCount}</span></div>
+    <div class="summary-item"><span class="summary-dot" style="background:var(--red)"></span>未闭环 <span class="summary-num">${openCount}</span></div>
+    <div class="summary-item" style="color:var(--text-secondary)">|</div>
+    ${topCats.map(([k,v],i) => `<div class="summary-item"><span class="summary-dot" style="background:${colors[i%6]}"></span>${k} <span class="summary-num">${v}</span></div>`).join('')}
+    <div class="summary-item" style="color:var(--text-secondary)">|</div>
+    ${topBUs.map(([k,v]) => `<div class="summary-item"><span class="summary-num">${k}:${v}</span></div>`).join('')}
+  `;
+
+  // Filter bar
+  const uniqueBizUnits = [...new Set(records.map(r => r.bizUnit).filter(Boolean))].sort();
+  const uniqueCategories = [...new Set(records.map(r => r.category).filter(Boolean))].sort();
+
+  document.getElementById('filterBar').innerHTML = `
+    <input type="text" class="filter-input" id="filterKeyword" placeholder="🔍 搜索报关单号/提运单号/描述..." value="${abnormalFilters.keyword}">
+    <select class="filter-select" id="filterBizUnit">
+      <option value="">全部事业部</option>
+      ${uniqueBizUnits.map(u => `<option value="${u}"${abnormalFilters.bizUnit===u?' selected':''}>${u}</option>`).join('')}
+    </select>
+    <select class="filter-select" id="filterCategory">
+      <option value="">全部异常类别</option>
+      ${uniqueCategories.map(c => `<option value="${c}"${abnormalFilters.category===c?' selected':''}>${c}</option>`).join('')}
+    </select>
+    <select class="filter-select" id="filterStatus">
+      <option value="">全部状态</option>
+      <option value="已闭环"${abnormalFilters.status==='已闭环'?' selected':''}>已闭环</option>
+      <option value="未闭环"${abnormalFilters.status==='未闭环'?' selected':''}>未闭环</option>
+    </select>
+  `;
+
+  document.getElementById('filterKeyword').addEventListener('input', applyFilters);
+  document.getElementById('filterBizUnit').addEventListener('change', applyFilters);
+  document.getElementById('filterCategory').addEventListener('change', applyFilters);
+  document.getElementById('filterStatus').addEventListener('change', applyFilters);
+
+  // Table headers — widths tuned so all content stays single-line
+  const columns = [
+    { key: 'seq', label: '序号', width: '52px' },
+    { key: 'date', label: '日期', width: '88px' },
+    { key: 'category', label: '异常类别', width: '80px' },
+    { key: 'bizUnit', label: '事业部', width: '72px' },
+    { key: 'company', label: '经营单位', width: '150px' },
+    { key: 'importExport', label: '进出口', width: '52px' },
+    { key: 'customsNo', label: '报关单号', width: '155px' },
+    { key: 'bolNo', label: '提运单号', width: '140px' },
+    { key: 'responsible', label: '责任方', width: '82px' },
+    { key: 'description', label: '异常描述', width: '160px' },
+    { key: 'status', label: '闭环情况', width: '72px' },
+    { key: 'action', label: '详情', width: '52px' }
+  ];
+
+  document.getElementById('abnormalTableHead').innerHTML = columns.map(col => `
+    <th style="width:${col.width};cursor:pointer" data-sort="${col.key}" onclick="sortTable('${col.key}')">
+      ${col.label}<span class="sort-arrow">${abnormalSort.field===col.key?(abnormalSort.asc?'▲':'▼'):'⇅'}</span>
+    </th>
+  `).join('');
+
+  renderTableBody();
+}
+
+function applyFilters() {
+  abnormalFilters.keyword = document.getElementById('filterKeyword').value.trim();
+  abnormalFilters.bizUnit = document.getElementById('filterBizUnit').value;
+  abnormalFilters.category = document.getElementById('filterCategory').value;
+  abnormalFilters.status = document.getElementById('filterStatus').value;
+  renderTableBody();
+}
+
+function sortTable(field) {
+  if (abnormalSort.field === field) { abnormalSort.asc = !abnormalSort.asc; }
+  else { abnormalSort.field = field; abnormalSort.asc = true; }
+  document.querySelectorAll('#abnormalTableHead th').forEach(th => {
+    th.classList.toggle('sorted', th.dataset.sort === field);
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) arrow.textContent = th.dataset.sort === field ? (abnormalSort.asc ? '▲' : '▼') : '⇅';
+  });
+  renderTableBody();
+}
+
+function renderTableBody() {
+  let records = [...abnormalRecords];
+
+  if (abnormalFilters.keyword) {
+    const kw = abnormalFilters.keyword.toLowerCase();
+    records = records.filter(r =>
+      (r.customsNo||'').toLowerCase().includes(kw) || (r.bolNo||'').toLowerCase().includes(kw) ||
+      (r.description||'').toLowerCase().includes(kw) || (r.company||'').toLowerCase().includes(kw)
+    );
+  }
+  if (abnormalFilters.bizUnit) records = records.filter(r => r.bizUnit === abnormalFilters.bizUnit);
+  if (abnormalFilters.category) records = records.filter(r => r.category === abnormalFilters.category);
+  if (abnormalFilters.status) records = records.filter(r => r.status && r.status.includes(abnormalFilters.status));
+
+  if (abnormalSort.field) {
+    records.sort((a, b) => {
+      let va = a[abnormalSort.field] || '', vb = b[abnormalSort.field] || '';
+      if (abnormalSort.field === 'seq') { va = Number(va)||0; vb = Number(vb)||0; }
+      if (typeof va === 'number') return abnormalSort.asc ? va - vb : vb - va;
+      return abnormalSort.asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+  }
+
+  document.getElementById('abnormalTableBody').innerHTML = records.length === 0
+    ? '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text-secondary);">无匹配记录</td></tr>'
+    : records.map((r, i) => {
+        const catBadgeClass = r.category.includes('查验') ? 'badge-cat-inspect' :
+                              (r.category.includes('删改单')||r.category.includes('退柜')) ? 'badge-cat' : 'badge-cat-other';
+        const statusBadge = (r.status||'').includes('未闭环')
+          ? '<span class="badge badge-open">未闭环</span>' : '<span class="badge badge-closed">已闭环</span>';
+        return `<tr id="abRow${i}">
+          <td>${r.seq||'—'}</td>
+          <td>${r.date||'—'}</td>
+          <td><span class="badge ${catBadgeClass}">${r.category||'—'}</span></td>
+          <td>${r.bizUnit||'—'}</td>
+          <td style="overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(r.company||'')}">${r.company||'—'}</td>
+          <td>${r.importExport||'—'}</td>
+          <td style="font-family:var(--font-mono);font-size:11px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(r.customsNo||'')}">${r.customsNo||'—'}</td>
+          <td style="font-family:var(--font-mono);font-size:11px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(r.bolNo||'')}">${r.bolNo||'—'}</td>
+          <td>${r.responsible||'—'}</td>
+          <td style="overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(r.description||'')}">${r.description||'—'}</td>
+          <td>${statusBadge}</td>
+          <td><button class="expand-btn" onclick="toggleRowDetail(${i},this)">展开</button></td>
+        </tr>
+        <tr id="abDetail${i}" style="display:none">
+          <td colspan="12"><div class="expand-detail">
+            <strong>异常描述：</strong>${escapeHtml(r.description||'—')}<br>
+            <strong>处理进度：</strong>${escapeHtml(r.progress||'—')}<br>
+            <strong>异常费用：</strong>${r.fee||'—'} &nbsp; <strong>代理：</strong>${r.agent||'—'} &nbsp; <strong>柜号：</strong>${r.containerNo||'—'}
+          </div></td>
+        </tr>`;
+      }).join('');
+}
+
+function toggleRowDetail(idx, btn) {
+  const detailRow = document.getElementById('abDetail' + idx);
+  if (!detailRow) return;
+  const show = detailRow.style.display === 'none';
+  detailRow.style.display = show ? 'table-row' : 'none';
+  btn.textContent = show ? '收起' : '展开';
+  const parentRow = document.getElementById('abRow' + idx);
+  if (parentRow) parentRow.classList.toggle('expanded', show);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ==================== YEAR SWITCH ====================
+function switchYear(year) {
+  currentYear = year;
+  document.querySelectorAll('.year-btn').forEach(b => b.classList.toggle('active', b.dataset.year === year));
+  selectedDim = null;
+  document.getElementById('detailPanel').classList.remove('show');
+  // Reset filters & sort for the new year
+  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
+  abnormalSort = { field: null, asc: true };
+  // Just re-render — no DOM rebuild needed
+  renderAll();
+}
+
+// ==================== FOOTER ====================
+function updateFooter(data) {
+  const hasData = data && data.dailyData && data.dailyData.length > 0;
+  document.getElementById('footer').textContent = hasData
+    ? `数据更新时间: ${new Date().toLocaleString()} | ${currentYear} 年记录: ${data.dailyData.length} 天 | 异常: ${(data.abnormalRecords||[]).length} 条 | 华东口岸申报日报关情况`
+    : `数据更新时间: ${new Date().toLocaleString()} | 暂无数据 | 请口岸单位上传 Excel 报表`;
+}
+
+// ==================== TOAST ====================
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(toast._tid);
+  toast._tid = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// ==================== BOOT ====================
+init();
+</script>
+</body>
+</html>
