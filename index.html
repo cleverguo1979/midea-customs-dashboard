@@ -710,7 +710,7 @@ async function handleFileUpload(e) {
   if (!file) return;
   showToast('正在解析文件...');
   const reader = new FileReader();
-  reader.onload = function(ev) {
+  reader.onload = async function(ev) {
     try {
       const wb = XLSX.read(ev.target.result, { type: 'array' });
       const parsed = parseWorkbook(wb);
