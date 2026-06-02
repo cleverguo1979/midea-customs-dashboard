@@ -135,24 +135,49 @@
 
   /* Insight Card */
   .insight-card {
-    background: linear-gradient(135deg, rgba(0,113,227,0.04) 0%, rgba(0,113,227,0.01) 100%);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    border-radius: var(--radius); padding: 28px 32px; margin-bottom: 28px;
-    box-shadow: var(--shadow-sm); border: 1px solid rgba(0,113,227,0.12);
+    background: var(--card-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius); padding: 0; margin-bottom: 28px;
+    box-shadow: var(--shadow-sm); border: 1px solid rgba(255,255,255,0.6);
+    overflow: hidden;
   }
-  .insight-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
-  .insight-header h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.2px; }
-  .insight-header .insight-icon { font-size: 24px; }
-  .insight-body { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
-  .insight-col h4 { font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
-  .insight-item { display: flex; align-items: flex-start; gap: 8px; padding: 7px 0; font-size: 13px; line-height: 1.6; color: var(--text); }
-  .insight-item .dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
-  .insight-item .dot.warn { background: var(--red); }
-  .insight-item .dot.info { background: var(--accent); }
-  .insight-item .dot.ok { background: var(--green); }
-  .highlight-num { font-weight: 700; font-family: var(--font-mono); }
-  .highlight-red { color: var(--red); font-weight: 600; }
-  .highlight-green { color: var(--green); font-weight: 600; }
+  .insight-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 22px 28px;
+    border-bottom: 1px solid var(--separator);
+    background: rgba(0,113,227,0.03);
+  }
+  .insight-header .insight-icon { font-size: 22px; }
+  .insight-header h3 { font-size: 16px; font-weight: 700; letter-spacing: -0.2px; }
+  .insight-body { padding: 24px 28px 20px; }
+  .insight-section { margin-bottom: 20px; }
+  .insight-section:last-child { margin-bottom: 0; }
+  .insight-section h4 {
+    font-size: 13px; font-weight: 700; color: var(--text);
+    margin-bottom: 12px; display: flex; align-items: center; gap: 6px;
+  }
+  .insight-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 8px;
+  }
+  .insight-stat {
+    background: rgba(0,113,227,0.04); border-radius: 12px; padding: 14px 16px;
+    text-align: center;
+  }
+  .insight-stat .val { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; line-height: 1.1; }
+  .insight-stat .val.red { color: var(--red); }
+  .insight-stat .val.green { color: var(--green); }
+  .insight-stat .val.orange { color: var(--orange); }
+  .insight-stat .lbl { font-size: 11px; color: var(--text-secondary); margin-top: 4px; font-weight: 500; }
+  .insight-divider { height: 1px; background: var(--separator); margin: 18px 0; }
+  .insight-msg {
+    display: flex; align-items: flex-start; gap: 10px; padding: 12px 16px;
+    border-radius: 12px; font-size: 13px; line-height: 1.65; margin-bottom: 10px;
+  }
+  .insight-msg.warn { background: #fff5f5; border-left: 3px solid var(--red); }
+  .insight-msg.info { background: #f5f7fa; border-left: 3px solid var(--accent); }
+  .insight-msg.ok { background: #f0faf3; border-left: 3px solid var(--green); }
+  .insight-msg .msg-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .insight-msg .msg-text { flex: 1; }
+  .insight-num { font-weight: 700; font-family: var(--font-mono); font-size: 13px; }
 
   /* Section */
   .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
@@ -371,11 +396,7 @@
       <span class="insight-icon">🤖</span>
       <h3>智能分析总结</h3>
     </div>
-    <div class="insight-body" id="insightBody">
-      <div class="insight-col"><h4>📊 数据总览</h4><div id="insightOverview"></div></div>
-      <div class="insight-col"><h4>⚠️ 重点关注</h4><div id="insightAlerts"></div></div>
-      <div class="insight-col"><h4>💡 建议措施</h4><div id="insightSuggestions"></div></div>
-    </div>
+    <div class="insight-body" id="insightBody"></div>
   </div>
 
   <div class="footer" id="footer"></div>
@@ -964,130 +985,141 @@ function renderAnalysis(data) {
 // ==================== INTELLIGENT INSIGHTS ====================
 function renderInsights(data) {
   const records = (data && data.abnormalRecords) ? data.abnormalRecords : [];
-  const hasData = records.length > 0;
+  const body = document.getElementById('insightBody');
+  if (!body) return;
 
-  if (!hasData) {
-    document.getElementById('insightOverview').innerHTML = '<div class="insight-item"><span class="dot info"></span>暂无数据，请上传 Excel 报表后自动生成分析</div>';
-    document.getElementById('insightAlerts').innerHTML = '';
-    document.getElementById('insightSuggestions').innerHTML = '';
+  if (records.length === 0) {
+    body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:14px">暂无数据，上传 Excel 报表后自动生成分析报告</div>';
     return;
   }
 
   // ---- Compute stats ----
   const total = records.length;
   const closed = records.filter(r => r.status && !r.status.includes('未闭环')).length;
-  const open = total - closed;
+  const openCount = total - closed;
   const closeRate = total > 0 ? (closed / total * 100).toFixed(1) : 0;
 
   // Category breakdown
-  const catCounts = {};
+  const catMap = {};
   records.forEach(r => {
-    let key = r.category || '其他';
-    if (key.includes('删改单') && key.includes('退柜')) key = '删改单/退柜';
-    else if (key.includes('删改单')) key = '删改单';
-    else if (key.includes('查验')) key = '查验';
-    else if (key.includes('退柜')) key = '退柜';
-    else key = '其他';
-    catCounts[key] = (catCounts[key] || 0) + 1;
+    let k = r.category || '其他';
+    if (k.includes('删改单') && k.includes('退柜')) k = '删改单/退柜';
+    else if (k.includes('删改单')) k = '删改单';
+    else if (k.includes('查验')) k = '查验';
+    else if (k.includes('退柜')) k = '退柜';
+    else k = '其他';
+    catMap[k] = (catMap[k] || 0) + 1;
   });
-  const topCat = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0];
-  const topCatPct = topCat ? (topCat[1] / total * 100).toFixed(1) : 0;
+  const topCat = Object.entries(catMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
 
-  // Biz unit breakdown
-  const bizCounts = {};
-  records.forEach(r => {
-    const bu = r.bizUnit || '未知';
-    bizCounts[bu] = (bizCounts[bu] || 0) + 1;
-  });
-  const topBiz = Object.entries(bizCounts).sort((a, b) => b[1] - a[1])[0];
-  const topBizPct = topBiz ? (topBiz[1] / total * 100).toFixed(1) : 0;
+  // Biz unit
+  const bizMap = {};
+  records.forEach(r => { const b = r.bizUnit || '未知'; bizMap[b] = (bizMap[b] || 0) + 1; });
+  const topBiz = Object.entries(bizMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
 
-  // Open per category
+  // Responsible
+  const respMap = {};
+  records.forEach(r => { const x = r.responsible || '未知'; respMap[x] = (respMap[x] || 0) + 1; });
+  const topResp = Object.entries(respMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
+
+  // Unclosed per category
   const openByCat = {};
   records.filter(r => r.status && r.status.includes('未闭环')).forEach(r => {
-    let key = r.category || '其他';
-    if (key.includes('查验')) key = '查验';
-    else if (key.includes('删改单')) key = '删改单';
-    else key = '其他';
-    openByCat[key] = (openByCat[key] || 0) + 1;
+    let k = r.category || '其他';
+    if (k.includes('查验')) k = '查验'; else if (k.includes('删改单')) k = '删改单'; else k = '其他';
+    openByCat[k] = (openByCat[k] || 0) + 1;
   });
-  const topOpenCat = Object.entries(openByCat).sort((a, b) => b[1] - a[1])[0];
+  const topOpenCat = Object.entries(openByCat).sort((a,b) => b[1] - a[1])[0] || ['—',0];
 
-  // Responsible breakdown (top issue source)
-  const respCounts = {};
-  records.forEach(r => {
-    const resp = r.responsible || '未知';
-    respCounts[resp] = (respCounts[resp] || 0) + 1;
-  });
-  const topResp = Object.entries(respCounts).sort((a, b) => b[1] - a[1])[0];
-
-  // ---- Overview ----
-  const overviewItems = [
-    { cls: 'info', text: `累计异常 <span class="highlight-num">${total}</span> 条，已闭环 <span class="highlight-num">${closed}</span> 条（<span class="highlight-green">${closeRate}%</span>），未闭环 <span class="highlight-num">${open}</span> 条` },
-    { cls: 'info', text: `异常最多的类别为 <span class="highlight-num">「${topCat[0]}」</span>（${topCat[1]} 条，占比 ${topCatPct}%）` },
-    { cls: topBizPct > 40 ? 'warn' : 'info', text: `异常最多的事业部为 <span class="highlight-num">「${topBiz[0]}」</span>（${topBiz[1]} 条，占比 ${topBizPct}%）${topBizPct > 40 ? '，<span class="highlight-red">占比超过40%，需重点关注</span>' : ''}` },
-    { cls: 'info', text: `问题主要来源：<span class="highlight-num">「${topResp ? topResp[0] : '未知'}」</span>（${topResp ? topResp[1] : 0} 条），${topResp && topResp[0] === '海关系统' ? '建议与海关加强沟通协调' : topResp && topResp[0] === '代理' ? '需评估代理服务质量' : topResp && topResp[0] === '美的' ? '需加强内部流程管控' : '建议针对性跟进'}` }
-  ];
-
-  document.getElementById('insightOverview').innerHTML = overviewItems.map(item =>
-    `<div class="insight-item"><span class="dot ${item.cls}"></span>${item.text}</div>`
-  ).join('');
-
-  // ---- Alerts ----
-  const alerts = [];
-  if (open > 0) {
-    alerts.push({ cls: 'warn', text: `<span class="highlight-red">${open} 条未闭环异常</span>需要尽快处理，其中 <span class="highlight-num">「${topOpenCat ? topOpenCat[0] : 'N/A'}」类别</span>最多（${topOpenCat ? topOpenCat[1] : 0} 条）` });
-  }
-  if (closeRate < 90) {
-    alerts.push({ cls: 'warn', text: `闭环率仅 <span class="highlight-red">${closeRate}%</span>，低于 90% 警戒线，需推动加快处理进度` });
-  }
-  if (topBizPct > 35) {
-    alerts.push({ cls: 'warn', text: `<span class="highlight-red">${topBiz[0]}</span> 事业部异常集中度过高，建议专项排查是否存在系统性问题` });
-  }
-  // Check for 查验 dominance
-  const inspCount = catCounts['查验'] || 0;
+  const inspCount = catMap['查验'] || 0;
   const inspPct = total > 0 ? (inspCount / total * 100).toFixed(1) : 0;
-  if (inspPct > 20) {
-    alerts.push({ cls: 'warn', text: `查验类异常占比 <span class="highlight-red">${inspPct}%</span>，建议加强申报准确性，减少查验率` });
-  }
-  // 删改单 check
-  const modCount = catCounts['删改单'] || 0;
+  const modCount = catMap['删改单'] || 0;
   const modPct = total > 0 ? (modCount / total * 100).toFixed(1) : 0;
-  if (modPct > 15) {
-    alerts.push({ cls: 'info', text: `删改单占比 ${modPct}%，建议检查申报资料质量，减少后续修改` });
+  const topBizPct = total > 0 ? (topBiz[1] / total * 100).toFixed(1) : 0;
+
+  // ---- Build HTML ----
+  let html = '';
+
+  // Stats row
+  html += '<div class="insight-stats">';
+  html += `<div class="insight-stat"><div class="val">${total}</div><div class="lbl">累计异常</div></div>`;
+  html += `<div class="insight-stat"><div class="val green">${closeRate}%</div><div class="lbl">闭环率</div></div>`;
+  html += `<div class="insight-stat"><div class="val ${openCount > 10 ? 'red' : 'orange'}">${openCount}</div><div class="lbl">未闭环</div></div>`;
+  html += `<div class="insight-stat"><div class="val">${Object.keys(catMap).length}</div><div class="lbl">异常类别</div></div>`;
+  html += '</div>';
+
+  // Key findings section
+  html += '<div class="insight-section"><h4>📋 关键发现</h4>';
+
+  // Build summary sentence
+  const respAdvice = topResp[0] === '海关系统' ? '建议与海关加强沟通协调' :
+                     topResp[0] === '代理' ? '需评估代理服务质量，考虑引入竞争机制' :
+                     topResp[0] === '美的' ? '需加强内部流程管控和人员培训' :
+                     `建议针对性跟进${topResp[0]}相关事项`;
+  const bizWarn = topBizPct > 40 ? `，<b style="color:var(--red)">占比超过40%，需重点关注</b>` : '';
+
+  html += `<div class="insight-msg info">
+    <span class="msg-icon">📌</span>
+    <span class="msg-text">
+      当前累计异常 <b>${total}</b> 条，闭环率 <b>${closeRate}%</b>。异常最集中的类别为 <b>「${topCat[0]}」</b>（${topCat[1]} 条，占比 ${(topCat[1]/total*100).toFixed(1)}%），
+      最突出的事业部为 <b>「${topBiz[0]}」</b>（${topBiz[1]} 条，占比 ${topBizPct}%）${bizWarn}。
+      问题主要来源为 <b>「${topResp[0]}」</b>（${topResp[1]} 条），${respAdvice}。
+    </span>
+  </div>`;
+
+  // Alert messages
+  const alerts = [];
+  if (openCount > 0) {
+    alerts.push({ cls: 'warn', icon: '⚠️', text: `<b>${openCount} 条未闭环</b>需尽快处理，其中 <b>「${topOpenCat[0]}」</b>最多（${topOpenCat[1]} 条）` });
   }
-
-  if (alerts.length === 0) {
-    alerts.push({ cls: 'ok', text: '✅ 当前各项指标良好，无特别需关注事项' });
+  if (closeRate < 90 && closeRate > 0) {
+    alerts.push({ cls: 'warn', icon: '📉', text: `闭环率仅 <b>${closeRate}%</b>，低于 90% 警戒线，需推动加快处理进度` });
   }
-
-  document.getElementById('insightAlerts').innerHTML = alerts.map(item =>
-    `<div class="insight-item"><span class="dot ${item.cls}"></span>${item.text}</div>`
-  ).join('');
-
-  // ---- Suggestions ----
-  const suggestions = [];
   if (inspPct > 20) {
-    suggestions.push({ cls: 'warn', text: '针对高查验率，建议：① 申报前增加预审环节 ② 对高频查验品类建立标准申报模板 ③ 定期与海关沟通查验标准变化' });
+    alerts.push({ cls: 'warn', icon: '🔍', text: `查验类异常占比 <b>${inspPct}%</b>，高于正常水平，建议加强申报准确性` });
+  }
+  if (modPct > 15 && modCount > 10) {
+    alerts.push({ cls: 'info', icon: '📝', text: `删改单占比 ${modPct}%（${modCount} 条），建议检查申报资料质量，减少后续修改` });
+  }
+
+  if (alerts.length > 0) {
+    html += alerts.map(a => `
+      <div class="insight-msg ${a.cls}">
+        <span class="msg-icon">${a.icon}</span>
+        <span class="msg-text">${a.text}</span>
+      </div>`).join('');
+  }
+
+  // Recommendation
+  html += '<div class="insight-section"><h4>💡 行动建议</h4>';
+
+  const suggestions = [];
+  if (openCount > 5) {
+    suggestions.push({ icon: '📅', text: `本周内召开异常跟进会议，逐条确认 <b>${openCount} 条</b>未闭环事项的责任人和完成时间` });
+  }
+  if (inspPct > 20) {
+    suggestions.push({ icon: '✅', text: '申报前增加预审环节，对高频查验品类建立标准申报模板，定期与海关沟通查验标准变化' });
   }
   if (modCount > 30) {
-    suggestions.push({ cls: 'info', text: '针对删改单较多，建议：① 加强申报信息核对流程 ② 对代理进行质量考核 ③ 建立申报错误追溯机制' });
+    suggestions.push({ icon: '🔧', text: '加强申报信息核对流程，对代理进行质量考核，建立申报错误追溯机制' });
   }
   if (topBizPct > 30) {
-    suggestions.push({ cls: 'info', text: `建议对 ${topBiz[0]} 开展专项审计，排查流程或人员问题，从源头减少异常发生` });
+    suggestions.push({ icon: '🎯', text: `对 <b>${topBiz[0]}</b> 开展专项审计，排查流程或人员问题，从源头减少异常` });
   }
-  if (open > 5) {
-    suggestions.push({ cls: 'warn', text: `建议本周内召开异常跟进会议，逐条确认 ${open} 条未闭环事项的责任人和完成时间` });
+  if (closeRate >= 95 && openCount <= 3) {
+    suggestions.push({ icon: '🌟', text: '整体管控良好，保持现有流程，建议每月定期复盘，持续优化' });
   }
-  if (closeRate >= 95 && open <= 3) {
-    suggestions.push({ cls: 'ok', text: '✅ 整体管控良好，保持现有流程，建议每月定期复盘，持续优化' });
-  }
-  // Always add a general recommendation
-  suggestions.push({ cls: 'info', text: '建议建立异常数据周报机制，跟踪各类异常变化趋势，实现事前预防而非事后处理' });
+  suggestions.push({ icon: '📊', text: '建立异常数据周报机制，跟踪各类异常变化趋势，实现事前预防而非事后处理' });
 
-  document.getElementById('insightSuggestions').innerHTML = suggestions.map(item =>
-    `<div class="insight-item"><span class="dot ${item.cls}"></span>${item.text}</div>`
-  ).join('');
+  html += suggestions.map(s => `
+    <div class="insight-msg info">
+      <span class="msg-icon">${s.icon}</span>
+      <span class="msg-text">${s.text}</span>
+    </div>`).join('');
+
+  html += '</div>'; // end suggestion section
+
+  body.innerHTML = html;
 }
 
 // ==================== UNCLEARED DIMENSION PARSING ====================
