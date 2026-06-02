@@ -258,7 +258,7 @@
   .data-table tr:hover td { background: rgba(0,113,227,0.025); }
   .data-table tr.expanded td { background: rgba(0,113,227,0.04); }
   .data-table .ellipsis { max-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
   .badge-closed { background: #e2f2e8; color: #1b8c3c; }
   .badge-open { background: #fde8e8; color: #c41515; }
   .badge-cat { background: #e8edfb; color: #3d5fc9; }
@@ -416,7 +416,7 @@
     </div>
     <div style="overflow-x:auto;">
       <table class="detail-table">
-        <thead><tr><th style="width:50px">序号</th><th style="width:170px">单号</th><th style="width:180px">异常描述</th><th>处理进度</th><th style="width:80px">状态</th></tr></thead>
+        <thead><tr><th style="width:50px">序号</th><th style="width:150px">单号</th><th style="width:160px">异常描述</th><th>处理进度</th><th style="width:90px">状态</th></tr></thead>
         <tbody id="detailBody"></tbody>
       </table>
     </div>
