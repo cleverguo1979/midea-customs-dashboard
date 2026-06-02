@@ -489,7 +489,10 @@ let aiCache = null;
 // Cloud API server — deployed at Render. All users share data through this.
 // Local dev: uses localhost. Production (GitHub Pages): uses deployed server.
 const IS_DEV = window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168.');
-const API_SERVER = IS_DEV ? window.location.origin : 'https://midea-dashboard.onrender.com';
+// Cloud API server. For production, use Render deployment or localhost.run tunnel.
+// Start tunnel: bash tunnel.sh  (generates a public URL)
+// Permanent: deploy to Render via render.yaml
+const API_SERVER = IS_DEV ? window.location.origin : 'https://12e683a4edc63d.lhr.life';
 
 // ==================== DATE UTILS ====================
 // Standard Excel serial → JS Date (works across timezones)
