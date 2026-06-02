@@ -1602,7 +1602,7 @@ function showDimensionDetail(idx) {
     const progress = matched ? matched.progress : '—';
     const statusBadge = matched
       ? (matched.status.includes('未闭环') ? '<span class="badge badge-open">未闭环</span>' : '<span class="badge badge-closed">已闭环</span>')
-      : '<span style="color:var(--text-secondary)">—</span>';
+      : '<span class="badge badge-open">未放行</span>';
     return `<tr>
       <td>${i + 1}</td>
       <td class="mono" style="font-size:12px">${item.id}</td>
