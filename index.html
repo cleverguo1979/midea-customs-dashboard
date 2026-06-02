@@ -684,16 +684,15 @@ function saveSettings() {
   if (ghKey) parts.push('云端同步已启用');
   if (aiKey) parts.push('AI 分析已启用');
   showToast(parts.length > 0 ? parts.join('，') : '密钥已清除');
-    showToast('API Key 已保存，智能分析已启用');
-  } else {
-    showToast('API Key 已清除，将使用本地规则分析');
-  }
 }
 
 function resetAllData() {
   if (!confirm('确定要清除所有数据吗？此操作不可撤销。')) return;
   appData = { '2025': null, '2026': null };
   localStorage.removeItem('midea_dashboard_data');
+  localStorage.removeItem('midea_api_key');
+  localStorage.removeItem('midea_gh_token');
+  apiKey = ''; ghToken = '';
   aiCache = null;
   currentYear = '2026';
   selectedDim = null;
