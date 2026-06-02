@@ -1156,7 +1156,7 @@ function renderAnalysis(data) {
   // 2. 异常类别分布 (donut chart)
   const catCounts = {};
   records.forEach(r => {
-    const cat = r.category || '其他';
+    const cat = (!r.category || r.category === '(空)') ? '其他' : r.category;
     // Normalize categories
     let key = cat;
     if (cat.includes('删改单') && cat.includes('退柜')) key = '删改单/退柜';
@@ -1237,7 +1237,7 @@ function computeInsightStats(records) {
 
   const catMap = {};
   records.forEach(r => {
-    let k = r.category || '其他';
+    let k = (!r.category || r.category === '(空)') ? '其他' : r.category;
     if (k.includes('删改单') && k.includes('退柜')) k = '删改单/退柜';
     else if (k.includes('删改单')) k = '删改单';
     else if (k.includes('查验')) k = '查验';
@@ -1254,7 +1254,7 @@ function computeInsightStats(records) {
 
   const openByCat = {};
   records.filter(r => r.status && r.status.includes('未闭环')).forEach(r => {
-    let k = r.category || '其他';
+    let k = (!r.category || r.category === '(空)') ? '其他' : r.category;
     if (k.includes('查验')) k = '查验'; else if (k.includes('删改单')) k = '删改单'; else k = '其他';
     openByCat[k] = (openByCat[k] || 0) + 1;
   });
@@ -1629,8 +1629,16 @@ function renderAbnormalTable(data) {
 
   const categories = {}, bizUnits = {};
   let closedCount = 0, openCount = 0;
+  function normCat(c) {
+    if (!c || c === '(空)') return '其他';
+    if (c.includes('删改单') && c.includes('退柜')) return '删改单/退柜';
+    if (c.includes('删改单')) return '删改单';
+    if (c.includes('查验')) return '查验';
+    if (c.includes('退柜')) return '退柜';
+    return '其他';
+  }
   records.forEach(r => {
-    const cat = r.category || '(空)';
+    const cat = normCat(r.category);
     categories[cat] = (categories[cat] || 0) + 1;
     const bu = r.bizUnit || '(空)';
     bizUnits[bu] = (bizUnits[bu] || 0) + 1;
