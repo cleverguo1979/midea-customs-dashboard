@@ -1275,7 +1275,7 @@ function switchYear(year) {
 function updateFooter(data) {
   const hasData = data && data.dailyData && data.dailyData.length > 0;
   document.getElementById('footer').textContent = hasData
-    ? `数据更新时间: ${new Date().toLocaleString()} | ${currentYear} 年记录: ${data.dailyData.length} 天 | 异常: ${(data.abnormalRecords||[]).length} 条 | 华东口岸申报日报关情况`
+    ? `数据更新时间: ${new Date().toLocaleString()} | ${currentYear} 年记录: ${data.dailyData.length} 天 | 异常: ${(data.abnormalRecords||[]).length} 条 | github.com/cleverguo1979/midea-customs-dashboard`
     : `数据更新时间: ${new Date().toLocaleString()} | 暂无数据 | 请口岸单位上传 Excel 报表`;
 }
 
