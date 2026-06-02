@@ -371,16 +371,11 @@
 <div class="modal-overlay" id="settingsModal">
   <div class="modal-box">
     <h3>⚙️ 设置</h3>
-    <div class="modal-desc">配置后，数据将保存到云端，所有访问者共享同一份数据。AI 密钥启用智能分析。</div>
+    <div class="modal-desc">数据自动通过云端服务器同步，所有访问者共享同一份数据。配置 AI 密钥可启用智能分析。</div>
     <div class="modal-body">
-      <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">GitHub Token（数据同步）</label>
-      <input type="password" id="ghTokenInput" placeholder="ghp_... 或 gho_...">
-      <div style="font-size:10px;color:#aeaeb2;margin-top:2px">需 repo 权限，用于上传数据到云端共享</div>
-      <div style="margin-top:12px">
-        <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Anthropic API Key（智能分析）</label>
-        <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-...">
-        <div style="font-size:10px;color:#aeaeb2;margin-top:2px">可选，不填则使用本地规则分析</div>
-      </div>
+      <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Anthropic API Key（智能分析）</label>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-...">
+      <div style="font-size:10px;color:#aeaeb2;margin-top:2px">可选，不填则使用本地规则分析</div>
     </div>
     <div class="modal-actions">
       <button class="btn-sm ghost" id="btnSettingsCancel">取消</button>
@@ -393,7 +388,6 @@
   <!-- Data Status -->
   <div class="data-status" id="dataStatus">
     <span><span class="dot empty" id="statusDot"></span><span id="statusText">暂无数据，请口岸单位上传 Excel 报表</span></span>
-    <span id="syncHint" style="display:none"></span>
     <span id="statusExtra"></span>
   </div>
 
@@ -490,11 +484,12 @@ let selectedDim = null;
 let abnormalRecords = [];
 let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
 let abnormalSort = { field: null, asc: true };
-let apiKey = '';            // Anthropic API key
-let ghToken = '';           // GitHub token for cloud sync
-let aiCache = null;         // { fp, html } cache for AI response
-const DATA_URL = 'https://raw.githubusercontent.com/cleverguo1979/midea-customs-dashboard/main/data.json';
-const DATA_API = 'https://api.github.com/repos/cleverguo1979/midea-customs-dashboard/contents/data.json';
+let apiKey = '';
+let aiCache = null;
+// Cloud API server — deployed at Render. All users share data through this.
+// Local dev: uses localhost. Production (GitHub Pages): uses deployed server.
+const IS_DEV = window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168.');
+const API_SERVER = IS_DEV ? window.location.origin : 'https://midea-dashboard.onrender.com';
 
 // ==================== DATE UTILS ====================
 // Standard Excel serial → JS Date (works across timezones)
@@ -507,36 +502,19 @@ function excelSerialToDate(serial) {
 function loadTokens() {
   try {
     apiKey = localStorage.getItem('midea_api_key') || '';
-    ghToken = localStorage.getItem('midea_gh_token') || '';
-  } catch(e) { apiKey = ''; ghToken = ''; }
+  } catch(e) { apiKey = ''; }
   const btn = document.getElementById('btnSettings');
-  if (btn) btn.classList.toggle('has-key', !!(apiKey || ghToken));
-  // Show sync status warning if no token configured
-  updateSyncHint();
+  if (btn) btn.classList.toggle('has-key', !!apiKey);
 }
 
-function updateSyncHint() {
-  const hint = document.getElementById('syncHint');
-  if (!hint) return;
-  if (!ghToken) {
-    hint.style.display = '';
-    hint.innerHTML = '⚠️ 未配置云端同步，上传的数据仅本机可见。<a href="#" onclick="openSettings();return false" style="color:var(--accent);font-weight:600">点击配置</a>';
-  } else {
-    hint.style.display = 'none';
-  }
-}
-
-function saveTokens(aiKey, ghKey) {
+function saveTokens(aiKey) {
   apiKey = aiKey;
-  ghToken = ghKey;
   try {
     if (aiKey) localStorage.setItem('midea_api_key', aiKey); else localStorage.removeItem('midea_api_key');
-    if (ghKey) localStorage.setItem('midea_gh_token', ghKey); else localStorage.removeItem('midea_gh_token');
   } catch(e) {}
   const btn = document.getElementById('btnSettings');
-  if (btn) btn.classList.toggle('has-key', !!(apiKey || ghToken));
+  if (btn) btn.classList.toggle('has-key', !!apiKey);
   aiCache = null;
-  updateSyncHint();
 }
 
 async function init() {
@@ -554,10 +532,9 @@ async function init() {
 
 async function fetchCloudData() {
   try {
-    const resp = await fetch(DATA_URL, { cache: 'no-cache' });
+    const resp = await fetch(API_SERVER + '/api/data', { cache: 'no-cache' });
     if (!resp.ok) return false;
     const cloud = await resp.json();
-    // Merge cloud data (it's the source of truth)
     let hasData = false;
     for (const year of ['2025', '2026']) {
       if (cloud[year] && cloud[year].dailyData && Array.isArray(cloud[year].dailyData) && cloud[year].dailyData.length > 0) {
@@ -566,55 +543,45 @@ async function fetchCloudData() {
       }
     }
     if (hasData) {
-      // Cache locally
       try { localStorage.setItem('midea_dashboard_data', JSON.stringify(appData)); } catch(e) {}
-      console.log('Cloud data loaded successfully');
+      console.log('Cloud data loaded from:', api);
     }
     return hasData;
   } catch(e) {
-    console.warn('Failed to fetch cloud data:', e.message);
+    console.warn('Cloud fetch failed:', e.message);
     return false;
   }
 }
 
 async function pushToCloud(dataToSave) {
-  if (!ghToken) return false;
   try {
-    const content = JSON.stringify(dataToSave, null, 2);
-    // Get current file SHA first
-    const getResp = await fetch(DATA_API, {
-      headers: { 'Authorization': 'token ' + ghToken, 'Accept': 'application/vnd.github+json' }
-    });
-    let sha = '';
-    if (getResp.ok) {
-      const info = await getResp.json();
-      sha = info.sha || '';
-    }
-    // Put updated content
-    const body = {
-      message: 'Update customs dashboard data',
-      content: btoa(unescape(encodeURIComponent(content))),
-      sha: sha || undefined
-    };
-    const putResp = await fetch(DATA_API, {
-      method: 'PUT',
-      headers: {
-        'Authorization': 'token ' + ghToken,
-        'Content-Type': 'application/json',
-        'Accept': 'application/vnd.github+json'
-      },
-      body: JSON.stringify(body)
-    });
-    if (putResp.ok) {
-      console.log('Cloud data updated successfully');
+    const jsonStr = JSON.stringify(dataToSave);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const form = new FormData();
+    form.append('file', blob, 'data.json');
+    const resp = await fetch(API_SERVER + '/api/upload', { method: 'POST', body: form });
+    if (resp.ok) {
+      const result = await resp.json();
+      console.log('Cloud sync OK:', result.message);
       return true;
     }
-    const err = await putResp.json().catch(() => ({}));
-    console.error('Cloud push failed:', err.message || putResp.status);
+    console.error('Cloud push failed:', resp.status);
     return false;
   } catch(e) {
     console.error('Cloud push error:', e.message);
     return false;
+  }
+}
+
+async function uploadExcelToServer(file) {
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const resp = await fetch(API_SERVER + '/api/upload', { method: 'POST', body: form });
+    const result = await resp.json();
+    return result;
+  } catch(e) {
+    return { success: false, error: e.message };
   }
 }
 
@@ -677,7 +644,6 @@ function bindEvents() {
 
 function openSettings() {
   document.getElementById('apiKeyInput').value = apiKey;
-  document.getElementById('ghTokenInput').value = ghToken;
   document.getElementById('settingsModal').classList.add('show');
 }
 
@@ -687,18 +653,14 @@ function closeSettings() {
 
 function saveSettings() {
   const aiKey = document.getElementById('apiKeyInput').value.trim();
-  const ghKey = document.getElementById('ghTokenInput').value.trim();
-  saveTokens(aiKey, ghKey);
+  saveTokens(aiKey);
   closeSettings();
   aiCache = null;
   const data = appData[currentYear];
   if (data && data.abnormalRecords && data.abnormalRecords.length > 0) {
     renderInsights(data);
   }
-  const parts = [];
-  if (ghKey) parts.push('云端同步已启用');
-  if (aiKey) parts.push('AI 分析已启用');
-  showToast(parts.length > 0 ? parts.join('，') : '密钥已清除');
+  showToast(aiKey ? 'AI 分析已启用' : 'AI 密钥已清除，使用本地规则分析');
 }
 
 function resetAllData() {
@@ -706,8 +668,7 @@ function resetAllData() {
   appData = { '2025': null, '2026': null };
   localStorage.removeItem('midea_dashboard_data');
   localStorage.removeItem('midea_api_key');
-  localStorage.removeItem('midea_gh_token');
-  apiKey = ''; ghToken = '';
+  apiKey = '';
   aiCache = null;
   currentYear = '2026';
   selectedDim = null;
@@ -754,22 +715,22 @@ async function handleFileUpload(e) {
         );
       }
 
-      // Push to cloud so all visitors share the same data
-      const cloudData = {};
-      for (const y of ['2025', '2026']) { if (appData[y]) cloudData[y] = appData[y]; else cloudData[y] = null; }
-      const pushed = await pushToCloud(cloudData);
-      if (!pushed) {
-        console.warn('Cloud sync failed — data only saved locally');
+      // Push to cloud server — all visitors share this data
+      const serverResult = await uploadExcelToServer(file);
+      if (serverResult.success) {
+        showToast(`✅ 数据已更新并同步云端 · ${serverResult.totalDays} 天，${serverResult.totalAbnormal} 条异常 · 所有人可见`);
+      } else {
+        // Fallback: try legacy pushToCloud
+        const cloudData = {};
+        for (const y of ['2025', '2026']) { if (appData[y]) cloudData[y] = appData[y]; else cloudData[y] = null; }
+        const pushed = await pushToCloud(cloudData);
+        showToast(pushed ? '数据已同步云端' : '数据已更新（仅本地）· 云端暂不可用，请检查服务器');
       }
 
-      // Only refresh data in place
+      // Refresh
       selectedDim = null;
       document.getElementById('detailPanel').classList.remove('show');
       renderAll();
-
-      const totalDays = Object.values(parsed).reduce((s, p) => s + (p.dailyData ? p.dailyData.length : 0), 0);
-      const totalAb = Object.values(parsed).reduce((s, p) => s + (p.abnormalRecords ? p.abnormalRecords.length : 0), 0);
-      showToast(`数据更新成功！${years.join('、')} 年，${totalDays} 天记录，${totalAb} 条异常${pushed ? ' ✓ 已同步云端' : ' (仅本地)'}`);
     } catch(err) {
       console.error('Upload parse error:', err);
       console.error('Error stack:', err.stack);
