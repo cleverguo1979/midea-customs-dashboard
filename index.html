@@ -284,6 +284,48 @@
   }
   .toast.show { opacity: 1; transform: translateY(0); }
 
+  /* Settings Modal */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,0.3); backdrop-filter: blur(6px);
+    align-items: center; justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: #fff; border-radius: 20px; width: 440px; max-width: 90vw;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.2); overflow: hidden;
+  }
+  .modal-box h3 { font-size: 15px; font-weight: 700; padding: 20px 24px 0; }
+  .modal-box .modal-desc { font-size: 12px; color: var(--text-secondary); padding: 6px 24px 16px; }
+  .modal-box .modal-body { padding: 0 24px 20px; }
+  .modal-box input {
+    width: 100%; padding: 10px 14px; font-size: 13px; border: 1px solid #d1d1d6;
+    border-radius: 10px; outline: none; font-family: var(--font-mono);
+  }
+  .modal-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.12); }
+  .modal-box .modal-actions { display: flex; gap: 8px; justify-content: flex-end; padding: 0 24px 20px; }
+  .modal-box .btn-sm {
+    padding: 8px 18px; font-size: 13px; font-weight: 600; border-radius: 10px;
+    cursor: pointer; border: none; transition: all 0.15s;
+  }
+  .modal-box .btn-sm.primary { background: var(--accent); color: #fff; }
+  .modal-box .btn-sm.primary:hover { background: var(--accent-hover); }
+  .modal-box .btn-sm.ghost { background: #e8e8ed; color: var(--text); }
+  .modal-box .btn-sm.ghost:hover { background: #d1d1d6; }
+  .btn-settings {
+    padding: 7px 10px; font-size: 18px; background: none; border: none;
+    cursor: pointer; border-radius: 10px; transition: all 0.15s; line-height: 1;
+  }
+  .btn-settings:hover { background: #e8e8ed; }
+  .btn-settings.has-key { color: var(--green); }
+
+  /* Loading dots */
+  .loading-dots { display: flex; gap: 4px; align-items: center; justify-content: center; padding: 30px; }
+  .loading-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: bounce 1.2s infinite; }
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-10px); opacity: 1; } }
+
   @media (max-width: 1200px) {
     .kpi-row { grid-template-columns: repeat(3, 1fr); }
     .analysis-row { grid-template-columns: 1fr 1fr; }
@@ -311,6 +353,7 @@
       <button class="year-btn" data-year="2025">2025</button>
       <button class="year-btn active" data-year="2026">2026</button>
     </div>
+    <button class="btn-settings" id="btnSettings" title="AI 分析设置">⚙️</button>
     <button class="btn-reset" id="btnReset" title="清除所有数据" style="display:none;padding:9px 14px;font-size:12px;font-weight:500;background:none;border:1px solid #d1d1d6;border-radius:10px;cursor:pointer;color:var(--text-secondary);transition:all 0.2s">🗑 清零</button>
     <button class="btn-upload" id="btnUpload" title="口岸单位上传Excel更新数据">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -320,6 +363,23 @@
 </nav>
 
 <div class="toast" id="toast"></div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box">
+    <h3>⚙️ AI 分析设置</h3>
+    <div class="modal-desc">配置 AI API 密钥后，智能分析总结将调用大模型生成真正的洞察。不配置则使用本地规则分析。</div>
+    <div class="modal-body">
+      <label style="font-size:12px;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">Anthropic API Key</label>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-...">
+      <div style="font-size:10px;color:#aeaeb2;margin-top:4px">密钥仅存储在浏览器本地，不会上传到任何服务器</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sm ghost" id="btnSettingsCancel">取消</button>
+      <button class="btn-sm primary" id="btnSettingsSave">保存</button>
+    </div>
+  </div>
+</div>
 
 <div class="main" id="mainContent">
   <!-- Data Status -->
@@ -413,7 +473,7 @@ if (typeof ChartDataLabels !== 'undefined') {
 Chart.defaults.plugins.datalabels = { display: false };
 
 // ==================== GLOBAL STATE ====================
-const DATA_VERSION = 2; // bump to invalidate old cached data
+const DATA_VERSION = 3;
 let appData = { '2025': null, '2026': null };
 let currentYear = '2026';
 let monthlyChart = null, bizUnitChart = null, categoryChart = null;
@@ -421,6 +481,8 @@ let selectedDim = null;
 let abnormalRecords = [];
 let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
 let abnormalSort = { field: null, asc: true };
+let apiKey = '';            // Anthropic API key from localStorage
+let aiCache = null;         // { dataHash, html } cache for AI response
 
 // ==================== DATE UTILS ====================
 // Standard Excel serial → JS Date (works across timezones)
@@ -430,8 +492,23 @@ function excelSerialToDate(serial) {
 }
 
 // ==================== INIT ====================
+function loadApiKey() {
+  try { apiKey = localStorage.getItem('midea_api_key') || ''; } catch(e) { apiKey = ''; }
+  const btn = document.getElementById('btnSettings');
+  if (btn) btn.classList.toggle('has-key', !!apiKey);
+}
+
+function saveApiKey(key) {
+  apiKey = key;
+  try { localStorage.setItem('midea_api_key', key); } catch(e) {}
+  const btn = document.getElementById('btnSettings');
+  if (btn) btn.classList.toggle('has-key', !!apiKey);
+  aiCache = null; // clear cache when key changes
+}
+
 function init() {
   loadFromStorage();
+  loadApiKey();
   // Always show the dashboard — with or without data
   renderAll();
   bindEvents();
@@ -483,15 +560,48 @@ function bindEvents() {
   document.getElementById('hiddenFileInput').addEventListener('change', handleFileUpload);
   document.getElementById('detailClose').addEventListener('click', closeDetail);
   document.getElementById('btnReset').addEventListener('click', resetAllData);
+  document.getElementById('btnSettings').addEventListener('click', openSettings);
+  document.getElementById('btnSettingsSave').addEventListener('click', saveSettings);
+  document.getElementById('btnSettingsCancel').addEventListener('click', closeSettings);
+  document.getElementById('settingsModal').addEventListener('click', function(e) {
+    if (e.target === this) closeSettings();
+  });
   document.querySelectorAll('.year-btn').forEach(btn => {
     btn.addEventListener('click', () => switchYear(btn.dataset.year));
   });
+}
+
+function openSettings() {
+  document.getElementById('apiKeyInput').value = apiKey;
+  document.getElementById('settingsModal').classList.add('show');
+}
+
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('show');
+}
+
+function saveSettings() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  saveApiKey(key);
+  closeSettings();
+  if (key) {
+    aiCache = null;
+    // Re-render insights with AI if data exists
+    const data = appData[currentYear];
+    if (data && data.abnormalRecords && data.abnormalRecords.length > 0) {
+      renderInsights(data);
+    }
+    showToast('API Key 已保存，智能分析已启用');
+  } else {
+    showToast('API Key 已清除，将使用本地规则分析');
+  }
 }
 
 function resetAllData() {
   if (!confirm('确定要清除所有数据吗？此操作不可撤销。')) return;
   appData = { '2025': null, '2026': null };
   localStorage.removeItem('midea_dashboard_data');
+  aiCache = null;
   currentYear = '2026';
   selectedDim = null;
   abnormalRecords = [];
@@ -1041,23 +1151,12 @@ function renderAnalysis(data) {
 }
 
 // ==================== INTELLIGENT INSIGHTS ====================
-function renderInsights(data) {
-  const records = (data && data.abnormalRecords) ? data.abnormalRecords : [];
-  const body = document.getElementById('insightBody');
-  if (!body) return;
-
-  if (records.length === 0) {
-    body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:14px">暂无数据，上传 Excel 报表后自动生成分析报告</div>';
-    return;
-  }
-
-  // ---- Compute stats ----
+function computeInsightStats(records) {
   const total = records.length;
   const closed = records.filter(r => r.status && !r.status.includes('未闭环')).length;
   const openCount = total - closed;
   const closeRate = total > 0 ? (closed / total * 100).toFixed(1) : 0;
 
-  // Category breakdown
   const catMap = {};
   records.forEach(r => {
     let k = r.category || '其他';
@@ -1068,116 +1167,232 @@ function renderInsights(data) {
     else k = '其他';
     catMap[k] = (catMap[k] || 0) + 1;
   });
-  const topCat = Object.entries(catMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
 
-  // Biz unit
   const bizMap = {};
   records.forEach(r => { const b = r.bizUnit || '未知'; bizMap[b] = (bizMap[b] || 0) + 1; });
-  const topBiz = Object.entries(bizMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
 
-  // Responsible
   const respMap = {};
   records.forEach(r => { const x = r.responsible || '未知'; respMap[x] = (respMap[x] || 0) + 1; });
-  const topResp = Object.entries(respMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
 
-  // Unclosed per category
   const openByCat = {};
   records.filter(r => r.status && r.status.includes('未闭环')).forEach(r => {
     let k = r.category || '其他';
     if (k.includes('查验')) k = '查验'; else if (k.includes('删改单')) k = '删改单'; else k = '其他';
     openByCat[k] = (openByCat[k] || 0) + 1;
   });
-  const topOpenCat = Object.entries(openByCat).sort((a,b) => b[1] - a[1])[0] || ['—',0];
 
-  const inspCount = catMap['查验'] || 0;
-  const inspPct = total > 0 ? (inspCount / total * 100).toFixed(1) : 0;
-  const modCount = catMap['删改单'] || 0;
-  const modPct = total > 0 ? (modCount / total * 100).toFixed(1) : 0;
-  const topBizPct = total > 0 ? (topBiz[1] / total * 100).toFixed(1) : 0;
+  return { total, closed, openCount, closeRate, catMap, bizMap, respMap, openByCat };
+}
 
-  // ---- Build HTML ----
+function dataFingerprint(records) {
+  // Simple hash to detect data changes (for AI cache invalidation)
+  return records.length + '|' +
+    records.filter(r => r.status && r.status.includes('未闭环')).length + '|' +
+    (records[0] ? (records[0].date || '') : '') + '|' +
+    (records[records.length-1] ? (records[records.length-1].date || '') : '');
+}
+
+async function renderInsights(data) {
+  const records = (data && data.abnormalRecords) ? data.abnormalRecords : [];
+  const body = document.getElementById('insightBody');
+  if (!body) return;
+
+  if (records.length === 0) {
+    body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-secondary);font-size:14px">暂无数据，上传 Excel 报表后自动生成分析报告</div>';
+    return;
+  }
+
+  const stats = computeInsightStats(records);
+  const fp = dataFingerprint(records);
+
+  // Show stats immediately, then load AI or rules analysis
+  renderInsightStats(stats);
+
+  // Check if we should use AI
+  if (apiKey) {
+    // Check cache
+    if (aiCache && aiCache.fp === fp) {
+      body.innerHTML = aiCache.html;
+      return;
+    }
+    // Show loading
+    body.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div><div style="text-align:center;font-size:12px;color:var(--text-secondary)">AI 正在分析数据...</div>';
+    try {
+      const aiHtml = await callAI(stats, records);
+      if (aiHtml) {
+        aiCache = { fp, html: aiHtml };
+        body.innerHTML = aiHtml;
+        return;
+      }
+    } catch(e) {
+      console.warn('AI analysis failed, falling back to rules:', e.message);
+    }
+  }
+
+  // Fallback: rules-based analysis
+  renderInsightStats(stats);
+  renderRulesAnalysis(stats, body);
+}
+
+function renderInsightStats(stats) {
+  const s = stats;
+  const topCat = Object.entries(s.catMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
+  const topBiz = Object.entries(s.bizMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
+  const topResp = Object.entries(s.respMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
+  const topBizPct = s.total > 0 ? (topBiz[1] / s.total * 100).toFixed(1) : 0;
+
   let html = '';
-
-  // Stats row
   html += '<div class="insight-stats">';
-  html += `<div class="insight-stat"><div class="val">${total}</div><div class="lbl">累计异常</div></div>`;
-  html += `<div class="insight-stat"><div class="val green">${closeRate}%</div><div class="lbl">闭环率</div></div>`;
-  html += `<div class="insight-stat"><div class="val ${openCount > 10 ? 'red' : 'orange'}">${openCount}</div><div class="lbl">未闭环</div></div>`;
-  html += `<div class="insight-stat"><div class="val">${Object.keys(catMap).length}</div><div class="lbl">异常类别</div></div>`;
+  html += `<div class="insight-stat"><div class="val">${s.total}</div><div class="lbl">累计异常</div></div>`;
+  html += `<div class="insight-stat"><div class="val green">${s.closeRate}%</div><div class="lbl">闭环率</div></div>`;
+  html += `<div class="insight-stat"><div class="val ${s.openCount > 10 ? 'red' : 'orange'}">${s.openCount}</div><div class="lbl">未闭环</div></div>`;
+  html += `<div class="insight-stat"><div class="val">${Object.keys(s.catMap).length}</div><div class="lbl">异常类别</div></div>`;
   html += '</div>';
 
-  // Key findings section
+  // Key findings
   html += '<div class="insight-section"><h4>📋 关键发现</h4>';
-
-  // Build summary sentence
   const respAdvice = topResp[0] === '海关系统' ? '建议与海关加强沟通协调' :
-                     topResp[0] === '代理' ? '需评估代理服务质量，考虑引入竞争机制' :
-                     topResp[0] === '美的' ? '需加强内部流程管控和人员培训' :
-                     `建议针对性跟进${topResp[0]}相关事项`;
+                     topResp[0] === '代理' ? '需评估代理服务质量' :
+                     topResp[0] === '美的' ? '需加强内部流程管控' : '建议针对性跟进';
   const bizWarn = topBizPct > 40 ? `，<b style="color:var(--red)">占比超过40%，需重点关注</b>` : '';
-
   html += `<div class="insight-msg info">
     <span class="msg-icon">📌</span>
     <span class="msg-text">
-      当前累计异常 <b>${total}</b> 条，闭环率 <b>${closeRate}%</b>。异常最集中的类别为 <b>「${topCat[0]}」</b>（${topCat[1]} 条，占比 ${(topCat[1]/total*100).toFixed(1)}%），
-      最突出的事业部为 <b>「${topBiz[0]}」</b>（${topBiz[1]} 条，占比 ${topBizPct}%）${bizWarn}。
-      问题主要来源为 <b>「${topResp[0]}」</b>（${topResp[1]} 条），${respAdvice}。
+      累计异常 <b>${s.total}</b> 条，闭环率 <b>${s.closeRate}%</b>。最集中类别 <b>「${topCat[0]}」</b>（${topCat[1]} 条，${(topCat[1]/s.total*100).toFixed(1)}%），
+      最突出事业部 <b>「${topBiz[0]}」</b>（${topBiz[1]} 条，${topBizPct}%）${bizWarn}。
+      主要来源 <b>「${topResp[0]}」</b>（${topResp[1]} 条），${respAdvice}。
     </span>
   </div>`;
 
-  // Alert messages
+  // Alerts
+  const inspCount = s.catMap['查验'] || 0;
+  const inspPct = s.total > 0 ? (inspCount / s.total * 100).toFixed(1) : 0;
+  const modCount = s.catMap['删改单'] || 0;
+  const modPct = s.total > 0 ? (modCount / s.total * 100).toFixed(1) : 0;
+  const topOpenCat = Object.entries(s.openByCat).sort((a,b) => b[1] - a[1])[0] || ['—',0];
+
   const alerts = [];
-  if (openCount > 0) {
-    alerts.push({ cls: 'warn', icon: '⚠️', text: `<b>${openCount} 条未闭环</b>需尽快处理，其中 <b>「${topOpenCat[0]}」</b>最多（${topOpenCat[1]} 条）` });
-  }
-  if (closeRate < 90 && closeRate > 0) {
-    alerts.push({ cls: 'warn', icon: '📉', text: `闭环率仅 <b>${closeRate}%</b>，低于 90% 警戒线，需推动加快处理进度` });
-  }
-  if (inspPct > 20) {
-    alerts.push({ cls: 'warn', icon: '🔍', text: `查验类异常占比 <b>${inspPct}%</b>，高于正常水平，建议加强申报准确性` });
-  }
-  if (modPct > 15 && modCount > 10) {
-    alerts.push({ cls: 'info', icon: '📝', text: `删改单占比 ${modPct}%（${modCount} 条），建议检查申报资料质量，减少后续修改` });
-  }
+  if (s.openCount > 0) alerts.push({ cls: 'warn', icon: '⚠️', text: `<b>${s.openCount} 条未闭环</b>需尽快处理，其中 <b>「${topOpenCat[0]}」</b>最多（${topOpenCat[1]} 条）` });
+  if (s.closeRate < 90 && s.closeRate > 0) alerts.push({ cls: 'warn', icon: '📉', text: `闭环率 <b>${s.closeRate}%</b>，低于 90% 警戒线` });
+  if (inspPct > 20) alerts.push({ cls: 'warn', icon: '🔍', text: `查验类占比 <b>${inspPct}%</b>，建议加强申报准确性` });
+  if (modPct > 15 && modCount > 10) alerts.push({ cls: 'info', icon: '📝', text: `删改单占比 ${modPct}%（${modCount} 条），建议提升资料质量` });
 
   if (alerts.length > 0) {
-    html += alerts.map(a => `
-      <div class="insight-msg ${a.cls}">
-        <span class="msg-icon">${a.icon}</span>
-        <span class="msg-text">${a.text}</span>
-      </div>`).join('');
+    html += alerts.map(a => `<div class="insight-msg ${a.cls}"><span class="msg-icon">${a.icon}</span><span class="msg-text">${a.text}</span></div>`).join('');
   }
+  html += '</div>'; // end key findings
 
-  // Recommendation
+  document.getElementById('insightBody').innerHTML = html;
+}
+
+function renderRulesAnalysis(stats, body) {
+  const s = stats;
+  const topBiz = Object.entries(s.bizMap).sort((a,b) => b[1] - a[1])[0] || ['—',0];
+  const topBizPct = s.total > 0 ? (topBiz[1] / s.total * 100).toFixed(1) : 0;
+  const inspCount = s.catMap['查验'] || 0;
+  const inspPct = s.total > 0 ? (inspCount / s.total * 100).toFixed(1) : 0;
+  const modCount = s.catMap['删改单'] || 0;
+  const modPct = s.total > 0 ? (modCount / s.total * 100).toFixed(1) : 0;
+
+  let html = body.innerHTML; // preserve stats + alerts
   html += '<div class="insight-section"><h4>💡 行动建议</h4>';
-
   const suggestions = [];
-  if (openCount > 5) {
-    suggestions.push({ icon: '📅', text: `本周内召开异常跟进会议，逐条确认 <b>${openCount} 条</b>未闭环事项的责任人和完成时间` });
-  }
-  if (inspPct > 20) {
-    suggestions.push({ icon: '✅', text: '申报前增加预审环节，对高频查验品类建立标准申报模板，定期与海关沟通查验标准变化' });
-  }
-  if (modCount > 30) {
-    suggestions.push({ icon: '🔧', text: '加强申报信息核对流程，对代理进行质量考核，建立申报错误追溯机制' });
-  }
-  if (topBizPct > 30) {
-    suggestions.push({ icon: '🎯', text: `对 <b>${topBiz[0]}</b> 开展专项审计，排查流程或人员问题，从源头减少异常` });
-  }
-  if (closeRate >= 95 && openCount <= 3) {
-    suggestions.push({ icon: '🌟', text: '整体管控良好，保持现有流程，建议每月定期复盘，持续优化' });
-  }
-  suggestions.push({ icon: '📊', text: '建立异常数据周报机制，跟踪各类异常变化趋势，实现事前预防而非事后处理' });
-
-  html += suggestions.map(s => `
-    <div class="insight-msg info">
-      <span class="msg-icon">${s.icon}</span>
-      <span class="msg-text">${s.text}</span>
-    </div>`).join('');
-
-  html += '</div>'; // end suggestion section
-
+  if (s.openCount > 5) suggestions.push({ icon: '📅', text: `本周召开异常跟进会议，逐条确认 <b>${s.openCount} 条</b>未闭环事项的责任人和完成时间` });
+  if (inspPct > 20) suggestions.push({ icon: '✅', text: '申报前增加预审环节，对高频查验品类建立标准申报模板' });
+  if (modCount > 30) suggestions.push({ icon: '🔧', text: '加强申报核对流程，对代理进行质量考核，建立错误追溯机制' });
+  if (topBizPct > 30) suggestions.push({ icon: '🎯', text: `对 <b>${topBiz[0]}</b> 开展专项审计，从源头排查问题` });
+  if (s.closeRate >= 95 && s.openCount <= 3) suggestions.push({ icon: '🌟', text: '整体管控良好，保持现有流程，建议每月复盘持续优化' });
+  suggestions.push({ icon: '📊', text: '建立异常数据周报机制，跟踪变化趋势，实现事前预防' });
+  html += suggestions.map(s => `<div class="insight-msg info"><span class="msg-icon">${s.icon}</span><span class="msg-text">${s.text}</span></div>`).join('');
+  html += '</div>';
   body.innerHTML = html;
+}
+
+async function callAI(stats, records) {
+  const topCat = Object.entries(stats.catMap).sort((a,b) => b[1] - a[1]).slice(0, 5);
+  const topBiz = Object.entries(stats.bizMap).sort((a,b) => b[1] - a[1]).slice(0, 5);
+  const topResp = Object.entries(stats.respMap).sort((a,b) => b[1] - a[1]).slice(0, 5);
+  const topOpen = Object.entries(stats.openByCat).sort((a,b) => b[1] - a[1]).slice(0, 3);
+
+  // Sample some unclosed records for context
+  const unclosedSamples = records
+    .filter(r => r.status && r.status.includes('未闭环'))
+    .slice(0, 10)
+    .map(r => `[${r.category}] ${r.bizUnit} | ${(r.description||'').substring(0,60)} | 责任:${r.responsible}`);
+
+  const prompt = `你是美的集团关务数据分析专家。请基于以下华东口岸报关异常数据，生成一份简洁的管理层分析报告。
+
+## 数据概览
+- 累计异常: ${stats.total} 条
+- 已闭环: ${stats.closed} 条 (${stats.closeRate}%)
+- 未闭环: ${stats.openCount} 条
+
+## 异常类别分布
+${topCat.map(([k,v]) => `- ${k}: ${v} 条 (${(v/stats.total*100).toFixed(1)}%)`).join('\n')}
+
+## 事业部排行
+${topBiz.map(([k,v]) => `- ${k}: ${v} 条 (${(v/stats.total*100).toFixed(1)}%)`).join('\n')}
+
+## 责任方分布
+${topResp.map(([k,v]) => `- ${k}: ${v} 条`).join('\n')}
+
+## 未闭环异常类别
+${topOpen.map(([k,v]) => `- ${k}: ${v} 条`).join('\n')}
+
+## 未闭环异常样例
+${unclosedSamples.map((s,i) => `${i+1}. ${s}`).join('\n')}
+
+请用以下格式输出（HTML片段，只输出<body>标签内的内容，不要输出任何其他文字）：
+
+<div class="insight-section"><h4>🤖 AI 深度分析</h4>
+<div class="insight-msg info"><span class="msg-icon">📌</span><span class="msg-text">
+[一段话总结当前异常情况的整体评价，包含关键数字]
+</span></div>
+</div>
+
+<div class="insight-section"><h4>⚠️ 风险提示</h4>
+[列出2-3条最重要的风险点，每条用 insight-msg 格式，warn 或 info 样式]
+</div>
+
+<div class="insight-section"><h4>💡 行动建议</h4>
+[列出2-4条最切实可行的建议，每条用 insight-msg info 格式，带合适的emoji图标]
+</div>
+
+要求：
+1. 语言简洁有力，面向高管
+2. 每个建议必须具体可执行
+3. 如果闭环率>95%要肯定成绩，如果<90%要强调紧迫性
+4. 如果某个事业部占比>30%要点出并给出针对性建议
+5. 只输出HTML，不要输出\`\`\`html或任何其他标记`;
+
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }]
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${resp.status}`);
+  }
+
+  const result = await resp.json();
+  const text = result.content[0].text;
+  // Extract HTML — strip any markdown code fences if present
+  let html = text.replace(/```html\n?/g, '').replace(/```\n?/g, '').trim();
+  // Ensure it starts with a div
+  if (!html.startsWith('<div')) {
+    html = '<div class="insight-section"><h4>🤖 AI 深度分析</h4>' + html + '</div>';
+  }
+  return html;
 }
 
 // ==================== UNCLEARED DIMENSION PARSING ====================
