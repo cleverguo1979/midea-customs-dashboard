@@ -379,47 +379,6 @@ function init() {
   // Always show the dashboard — with or without data
   renderAll();
   bindEvents();
-
-  // Auto-load sample data on first visit if no data in storage
-  if (!appData['2025'] && !appData['2026']) {
-    autoLoadSampleData();
-  }
-}
-
-function autoLoadSampleData() {
-  showToast('正在加载演示数据...');
-  // Try the Excel file in the same directory
-  fetch(encodeURI('华东口岸申报日报关情况 6.1.xlsx'))
-    .then(r => {
-      if (!r.ok) throw new Error('文件未找到');
-      return r.arrayBuffer();
-    })
-    .then(buf => {
-      const wb = XLSX.read(buf, { type: 'array' });
-      const parsed = parseWorkbook(wb);
-      if (!parsed || Object.keys(parsed).length === 0) {
-        showToast('演示数据解析失败');
-        return;
-      }
-      for (const year in parsed) {
-        appData[year] = parsed[year];
-      }
-      saveToStorage();
-      // Switch to most recent year
-      const years = Object.keys(appData).filter(y => appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0).sort();
-      if (years.length > 0) {
-        currentYear = years[years.length - 1];
-        document.querySelectorAll('.year-btn').forEach(b => b.classList.toggle('active', b.dataset.year === currentYear));
-      }
-      renderAll();
-      const totalDays = Object.values(appData).reduce((s, p) => s + (p && p.dailyData ? p.dailyData.length : 0), 0);
-      const totalAb = Object.values(appData).reduce((s, p) => s + (p && p.abnormalRecords ? p.abnormalRecords.length : 0), 0);
-      showToast(`演示数据已加载（${totalDays} 天，${totalAb} 条异常）`);
-    })
-    .catch(err => {
-      console.warn('Auto-load skipped:', err.message);
-      showToast('未找到演示数据文件，请手动上传 Excel');
-    });
 }
 
 function loadFromStorage() {
@@ -487,19 +446,12 @@ function handleFileUpload(e) {
         return;
       }
 
-      // Merge into appData
-      for (const year in parsed) {
-        if (appData[year] && appData[year].dailyData) {
-          const existingDates = new Set(appData[year].dailyData.map(d => d.date));
-          const newDaily = parsed[year].dailyData.filter(d => !existingDates.has(d.date));
-          appData[year].dailyData = [...appData[year].dailyData, ...newDaily]
-            .sort((a, b) => a.date.localeCompare(b.date));
-        } else {
+      // Full replace — latest upload is the single source of truth
+      for (const year of ['2025', '2026']) {
+        if (parsed[year]) {
           appData[year] = parsed[year];
-        }
-        // Abnormal records: always replace (latest upload is authoritative)
-        if (parsed[year].abnormalRecords && parsed[year].abnormalRecords.length > 0) {
-          appData[year].abnormalRecords = parsed[year].abnormalRecords;
+        } else {
+          appData[year] = null;
         }
       }
 
