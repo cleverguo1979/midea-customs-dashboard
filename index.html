@@ -1513,7 +1513,10 @@ function parseUnclearedDimensions(reasonStr) {
     const lines = section.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const items = lines.map(line => {
       const parts = line.split(/\s+/);
-      return { id: parts[0] || '', reason: parts.slice(1).join(' ') || line };
+      const id = parts[0] || '';
+      let reason = parts.slice(1).join(' ') || line;
+      if (dim.key === '\u67e5\u9a8c' && reason === id) reason = '\u9700\u8981\u67e5\u9a8c';
+      return { id, reason };
     }).filter(item => item.id);
 
     result.push({ ...dim, items, count: items.length });
