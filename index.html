@@ -311,6 +311,7 @@
       <button class="year-btn" data-year="2025">2025</button>
       <button class="year-btn active" data-year="2026">2026</button>
     </div>
+    <button class="btn-reset" id="btnReset" title="清除所有数据" style="display:none;padding:9px 14px;font-size:12px;font-weight:500;background:none;border:1px solid #d1d1d6;border-radius:10px;cursor:pointer;color:var(--text-secondary);transition:all 0.2s">🗑 清零</button>
     <button class="btn-upload" id="btnUpload" title="口岸单位上传Excel更新数据">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       上传数据
@@ -481,9 +482,24 @@ function bindEvents() {
   });
   document.getElementById('hiddenFileInput').addEventListener('change', handleFileUpload);
   document.getElementById('detailClose').addEventListener('click', closeDetail);
+  document.getElementById('btnReset').addEventListener('click', resetAllData);
   document.querySelectorAll('.year-btn').forEach(btn => {
     btn.addEventListener('click', () => switchYear(btn.dataset.year));
   });
+}
+
+function resetAllData() {
+  if (!confirm('确定要清除所有数据吗？此操作不可撤销。')) return;
+  appData = { '2025': null, '2026': null };
+  localStorage.removeItem('midea_dashboard_data');
+  currentYear = '2026';
+  selectedDim = null;
+  abnormalRecords = [];
+  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
+  abnormalSort = { field: null, asc: true };
+  document.getElementById('detailPanel').classList.remove('show');
+  renderAll();
+  showToast('数据已清除，请上传新的 Excel 报表');
 }
 
 // ==================== FILE UPLOAD & PARSE ====================
@@ -676,14 +692,17 @@ function updateStatusBar(hasData, data) {
   const dot = document.getElementById('statusDot');
   const text = document.getElementById('statusText');
   const extra = document.getElementById('statusExtra');
+  const btn = document.getElementById('btnReset');
   dot.className = 'dot ' + (hasData ? 'loaded' : 'empty');
   if (hasData) {
     const latestDate = data.dailyData[data.dailyData.length - 1].date;
     text.textContent = `数据已加载 · 最新日期 ${latestDate}`;
     extra.textContent = `${data.dailyData.length} 天记录 | ${(data.abnormalRecords || []).length} 条异常`;
+    btn.style.display = '';
   } else {
-    text.textContent = `暂无 ${currentYear} 年数据，请口岸单位上传 Excel 报表`;
+    text.textContent = `暂无数据，请口岸单位上传 Excel 报表（支持 2025/2026 年）`;
     extra.textContent = '上传后自动更新看板';
+    btn.style.display = 'none';
   }
 }
 
@@ -758,6 +777,38 @@ function renderKPIs(data) {
   `).join('');
 }
 
+// ==================== CHART HELPERS ====================
+function recreateCanvas(canvasId) {
+  // Chart.js destroy() removes the canvas from DOM.
+  // Recreate it so we can make a new chart.
+  const old = document.getElementById(canvasId);
+  if (!old) {
+    // Find the parent and create a fresh canvas
+    const parent = document.querySelector(`[id="${canvasId}"]`) || old;
+    // Try to find by looking for the wrapper
+    const wrap = document.querySelector('.chart-wrap');
+    if (wrap && document.getElementById(canvasId) === null) {
+      const c = document.createElement('canvas');
+      c.id = canvasId;
+      wrap.appendChild(c);
+    }
+  }
+}
+
+function getChartCanvas(canvasId, parentSelector) {
+  // Destroy old chart first, then ensure canvas exists, return context
+  const wrap = document.querySelector(parentSelector || '.chart-wrap');
+  if (!wrap) return null;
+  let canvas = document.getElementById(canvasId);
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.id = canvasId;
+    wrap.innerHTML = '';
+    wrap.appendChild(canvas);
+  }
+  return canvas.getContext('2d');
+}
+
 // ==================== CHARTS ====================
 function renderCharts(data) {
   const hasData = data && data.dailyData && data.dailyData.length > 0;
@@ -771,6 +822,8 @@ function renderCharts(data) {
   document.getElementById('chartMonthlyEmpty').style.display = 'none';
 
   const dailies = data.dailyData;
+  const ctx = getChartCanvas('chartMonthly');
+  if (!ctx) return;
 
   // Monthly chart — fixed 1-12 months for the selected year
   const monthlyMap = {};
@@ -789,9 +842,6 @@ function renderCharts(data) {
     releasedByMonth.push(monthlyMap[m] ? monthlyMap[m].released : 0);
   }
 
-  const canvasEl = document.getElementById('chartMonthly');
-  if (!canvasEl) return;
-  const ctx = canvasEl.getContext('2d');
   monthlyChart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -843,13 +893,27 @@ function renderAnalysis(data) {
   if (bizUnitChart) { bizUnitChart.destroy(); bizUnitChart = null; }
   if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
 
+  // Save chart wrappers before potentially overwriting
+  const bizWrap = document.querySelector('#analysisRow .analysis-card:nth-child(1) .analysis-chart-wrap');
+  const catWrap = document.querySelector('#analysisRow .analysis-card:nth-child(2) .analysis-chart-wrap');
+
   if (!hasData) {
-    document.getElementById('analysisRow').querySelectorAll('.analysis-chart-wrap').forEach(el => {
-      el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#c7c7cc;font-size:14px">暂无数据</div>';
-    });
+    if (bizWrap) bizWrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#c7c7cc;font-size:14px">暂无数据</div>';
+    if (catWrap) catWrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#c7c7cc;font-size:14px">暂无数据</div>';
     document.getElementById('responsibleRank').innerHTML = '<li style="color:#c7c7cc;justify-content:center">暂无数据</li>';
     return;
   }
+
+  // Recreate canvases (Chart.js destroy removes them)
+  function ensureCanvas(id, wrapEl) {
+    if (!wrapEl) return null;
+    let c = document.getElementById(id);
+    if (!c) { c = document.createElement('canvas'); c.id = id; wrapEl.innerHTML = ''; wrapEl.appendChild(c); }
+    return c.getContext('2d');
+  }
+  const ctx1 = ensureCanvas('chartBizUnit', bizWrap);
+  const ctx2 = ensureCanvas('chartCategory', catWrap);
+  if (!ctx1 || !ctx2) return;
 
   // 1. 事业部异常排行 (horizontal bar chart)
   const bizUnitCounts = {};
@@ -861,9 +925,6 @@ function renderAnalysis(data) {
   const maxBiz = bizSorted[0] ? bizSorted[0][1] : 1;
 
   const totalBiz = bizSorted.reduce((s, [,v]) => s + v, 0);
-  const canvas1 = document.getElementById('chartBizUnit');
-  if (!canvas1) return;
-  const ctx1 = canvas1.getContext('2d');
   bizUnitChart = new Chart(ctx1, {
     type: 'bar',
     data: {
@@ -921,9 +982,6 @@ function renderAnalysis(data) {
   const catColors = ['#ff3b30','#ff9500','#007aff','#34c759','#af52de','#5ac8fa','#8e8e93'];
 
   const totalCat = catEntries.reduce((s, [,v]) => s + v, 0);
-  const canvas2 = document.getElementById('chartCategory');
-  if (!canvas2) return;
-  const ctx2 = canvas2.getContext('2d');
   categoryChart = new Chart(ctx2, {
     type: 'doughnut',
     data: {
