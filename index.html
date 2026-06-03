@@ -707,7 +707,7 @@
     </div>
     <div style="overflow-x:auto;">
       <table class="detail-table">
-        <thead><tr><th style="width:50px">序号</th><th style="width:190px">单号</th><th>未放行原因</th><th style="width:130px">操作</th></tr></thead>
+        <thead><tr><th style="width:40px">序号</th><th style="width:80px">日期</th><th style="width:180px">单号</th><th>未放行原因</th><th style="width:130px">操作</th></tr></thead>
         <tbody id="detailBody"></tbody>
       </table>
     </div>
@@ -2334,9 +2334,48 @@ function parseUnclearedDimensions(reasonStr) {
 }
 
 // ==================== DIMENSION CARDS ====================
+// Aggregate uncleared items across all daily records with reviewCompleted > 0
+function aggregateUnclearedDimensions(data) {
+  const dimKeys = ['空运', '驳船', '大船', '公路', '查验'];
+  const result = dimKeys.map(k => ({ key: k, items: [], count: 0 }));
+
+  if (!data || !data.dailyData) return result;
+
+  // Collect from all records where reviewCompleted > 0
+  for (const record of data.dailyData) {
+    const rc = record.reviewCompleted || 0;
+    if (rc <= 0) continue;
+    const reason = (record.unclearedReason || '').trim();
+    if (!reason || reason === '无') continue;
+
+    const dims = parseUnclearedDimensions(reason);
+    for (let i = 0; i < dimKeys.length; i++) {
+      const dim = dims[i];
+      if (dim && dim.items.length > 0) {
+        // Tag each item with its source date and record ID
+        for (const item of dim.items) {
+          result[i].items.push({
+            ...item,
+            sourceDate: record.date,
+            dailyRecordId: record.id || ''
+          });
+        }
+      }
+    }
+  }
+
+  // Update counts
+  for (const dim of result) {
+    dim.count = dim.items.length;
+  }
+
+  return result;
+}
+
+let aggregatedDimensions = [];
+
 function renderDimensionCards(data) {
   const hasData = data && data.dailyData && data.dailyData.length > 0;
-
   const icons = { air: '✈️', barge: '🚢', ship: '🛳️', road: '🚛', inspect: '🔍' };
   const dimDefs = [
     { key: '空运', icon: 'air' },
@@ -2356,51 +2395,32 @@ function renderDimensionCards(data) {
         <div class="dim-desc">暂无数据</div>
       </div>
     `).join('');
+    aggregatedDimensions = [];
     return;
   }
 
-  // Find the most recent daily record with uncleared items (skip records with empty reason)
-  let latest = null;
-  for (let i = data.dailyData.length - 1; i >= 0; i--) {
-    const d = data.dailyData[i];
-    const reason = (d.unclearedReason || '').trim();
-    if (reason && reason !== '无') {
-      latest = d;
-      break;
-    }
-  }
-  if (!latest) latest = data.dailyData[data.dailyData.length - 1];
+  aggregatedDimensions = aggregateUnclearedDimensions(data);
+  // Count how many days have reviewCompleted > 0
+  const daysWithUncleared = data.dailyData.filter(d => (d.reviewCompleted || 0) > 0).length;
+  document.getElementById('unclearedDate').textContent = `累计 ${daysWithUncleared} 天有未放行`;
 
-  const dimensions = parseUnclearedDimensions(latest.unclearedReason);
-  document.getElementById('unclearedDate').textContent = `数据日期: ${latest.date}`;
-
-  document.getElementById('dimensionRow').innerHTML = dimensions.map((dim, idx) => `
+  document.getElementById('dimensionRow').innerHTML = aggregatedDimensions.map((dim, idx) => `
     <div class="dim-card${selectedDim === idx ? ' selected' : ''}" data-dim-idx="${idx}" onclick="selectDimension(${idx})">
-      <div class="dim-icon ${dim.icon}">${icons[dim.icon]}</div>
+      <div class="dim-icon ${dim.key === '空运' ? 'air' : dim.key === '驳船' ? 'barge' : dim.key === '大船' ? 'ship' : dim.key === '公路' ? 'road' : 'inspect'}">${icons[dim.key === '空运' ? 'air' : dim.key === '驳船' ? 'barge' : dim.key === '大船' ? 'ship' : dim.key === '公路' ? 'road' : 'inspect']}</div>
       <div class="dim-name">${dim.key}</div>
       <div class="dim-count" style="color:${dim.count > 0 ? (dim.key==='查验'?'var(--red)':'var(--text)') : 'var(--text-secondary)'}">${dim.count}</div>
       <div class="dim-desc">${dim.count > 0 ? '点击查看明细' : '无异常'}</div>
     </div>
   `).join('');
 
-  if (selectedDim !== null && selectedDim < dimensions.length) {
+  if (selectedDim !== null && selectedDim < aggregatedDimensions.length) {
     showDimensionDetail(selectedDim);
   }
 }
 
 function selectDimension(idx) {
-  const data = appData[currentYear];
-  if (!data || !data.dailyData || !data.dailyData.length) return;
-  // Find latest record with uncleared items
-  let latest = null;
-  for (let i = data.dailyData.length - 1; i >= 0; i--) {
-    const d = data.dailyData[i];
-    const reason = (d.unclearedReason || '').trim();
-    if (reason && reason !== '无') { latest = d; break; }
-  }
-  if (!latest) latest = data.dailyData[data.dailyData.length - 1];
-  const dimensions = parseUnclearedDimensions(latest.unclearedReason);
-  if (idx >= dimensions.length || dimensions[idx].count === 0) return;
+  if (!aggregatedDimensions.length) return;
+  if (idx >= aggregatedDimensions.length || aggregatedDimensions[idx].count === 0) return;
 
   if (selectedDim === idx) { closeDetail(); return; }
   selectedDim = idx;
@@ -2409,39 +2429,28 @@ function selectDimension(idx) {
 }
 
 function showDimensionDetail(idx) {
-  const data = appData[currentYear];
-  if (!data || !data.dailyData || !data.dailyData.length) return;
-  // Find latest record with uncleared items
-  let latest = null;
-  for (let i = data.dailyData.length - 1; i >= 0; i--) {
-    const d = data.dailyData[i];
-    const reason = (d.unclearedReason || '').trim();
-    if (reason && reason !== '无') { latest = d; break; }
-  }
-  if (!latest) latest = data.dailyData[data.dailyData.length - 1];
-  const dimensions = parseUnclearedDimensions(latest.unclearedReason);
-  if (idx >= dimensions.length) return;
+  if (!aggregatedDimensions.length || idx >= aggregatedDimensions.length) return;
 
-  const dim = dimensions[idx];
+  const dim = aggregatedDimensions[idx];
   const icons = { air: '✈️', barge: '🚢', ship: '🛳️', road: '🚛', inspect: '🔍' };
-  const dailyRecordId = latest.id || '';
   document.getElementById('detailTitle').innerHTML = `${icons[dim.icon]} ${dim.key} — 未放行明细（${dim.count}条）`;
   document.getElementById('detailPanel').classList.add('show');
 
   if (dim.items.length === 0) {
-    document.getElementById('detailBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-secondary);">无异常记录</td></tr>';
+    document.getElementById('detailBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary);">无异常记录</td></tr>';
     return;
   }
 
   document.getElementById('detailBody').innerHTML = dim.items.map((item, i) => `
     <tr id="dimItem${i}">
       <td>${i + 1}</td>
+      <td style="font-size:11px;color:var(--text-secondary)">${escapeHtml(item.sourceDate || '—')}</td>
       <td class="mono" style="font-size:13px">${escapeHtml(item.id)}</td>
       <td>${escapeHtml(item.reason)}</td>
       <td>
         <div class="action-btns">
-          <button class="btn-row-action edit" onclick="releaseDimensionItem('${escapeHtml(dailyRecordId)}','${escapeHtml(dim.key)}','${escapeHtml(item.id + ' ' + item.reason)}')" title="标记已放行">✅ 已放行</button>
-          <button class="btn-row-action note" onclick="transferDimensionItem('${escapeHtml(dailyRecordId)}','${escapeHtml(dim.key)}','${escapeHtml(item.id + ' ' + item.reason)}')" title="转异常跟进">📋 转问题</button>
+          <button class="btn-row-action edit" onclick="releaseDimensionItem('${escapeHtml(item.dailyRecordId)}','${escapeHtml(dim.key)}','${escapeHtml(item.id + ' ' + item.reason)}')" title="标记已放行">✅ 已放行</button>
+          <button class="btn-row-action note" onclick="transferDimensionItem('${escapeHtml(item.dailyRecordId)}','${escapeHtml(dim.key)}','${escapeHtml(item.id + ' ' + item.reason)}')" title="转异常跟进">📋 转问题</button>
         </div>
       </td>
     </tr>
