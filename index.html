@@ -2299,8 +2299,12 @@ function parseUnclearedDimensions(reasonStr) {
     const dim = dimensions[i];
     const nextDim = dimensions[i + 1];
 
-    // Find start: "key：" or "key:" or "key \n" or "key\n"
-    const startPatterns = [dim.key + '：', dim.key + ':', dim.key + ' \n', dim.key + '\n'];
+    // Find start: "key：", "key:", "key \n", or "key" followed by space and items
+    const startPatterns = [
+      dim.key + '：', dim.key + ':',
+      dim.key + ' \n', dim.key + '\n',
+      '\n' + dim.key + ' \n', '\n' + dim.key + '\n'
+    ];
     let startIdx = -1;
     for (const pat of startPatterns) {
       startIdx = reasonStr.indexOf(pat);
@@ -2308,10 +2312,14 @@ function parseUnclearedDimensions(reasonStr) {
     }
     if (startIdx === -1) { result.push({ ...dim, items: [], count: 0 }); continue; }
 
-    // Find end: next dimension header
+    // Find end: next dimension header (with or without colon)
     let endIdx = reasonStr.length;
     if (nextDim) {
-      const endPatterns = [nextDim.key + '：', nextDim.key + ':', '\n' + nextDim.key + ' ', '\n' + nextDim.key + '\n', nextDim.key + ' \n', nextDim.key + '\n'];
+      const endPatterns = [];
+      for (const fmt of ['：', ':', ' \n', '\n']) {
+        endPatterns.push(nextDim.key + fmt);
+        endPatterns.push('\n' + nextDim.key + fmt);
+      }
       for (const pat of endPatterns) {
         const idx = reasonStr.indexOf(pat, startIdx);
         if (idx !== -1 && idx < endIdx) endIdx = idx;
@@ -2320,13 +2328,20 @@ function parseUnclearedDimensions(reasonStr) {
 
     const section = reasonStr.substring(startIdx, endIdx).trim();
     const lines = section.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    const items = lines.map(line => {
-      const parts = line.split(/\s+/);
-      const id = parts[0] || '';
-      let reason = parts.slice(1).join(' ') || line;
-      if (dim.key === '\u67e5\u9a8c' && reason === id) reason = '\u9700\u8981\u67e5\u9a8c';
-      return { id, reason };
-    }).filter(item => item.id);
+    const items = lines
+      .filter(line => {
+        // Skip summary lines like "23\u7968\u5ba1\u7ed3\u672a\u653e\u884c"
+        if (/^\d+\u7968/.test(line)) return false;
+        if (/\u5ba1\u7ed3\u672a\u653e\u884c/.test(line)) return false;
+        return true;
+      })
+      .map(line => {
+        const parts = line.split(/\s+/);
+        const id = parts[0] || '';
+        let reason = parts.slice(1).join(' ') || line;
+        if (dim.key === '\u67e5\u9a8c' && reason === id) reason = '\u9700\u8981\u67e5\u9a8c';
+        return { id, reason };
+      }).filter(item => item.id);
 
     result.push({ ...dim, items, count: items.length });
   }
