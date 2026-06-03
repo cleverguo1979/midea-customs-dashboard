@@ -242,7 +242,7 @@
     border-radius: var(--radius); box-shadow: var(--shadow-sm); border: 1px solid rgba(255,255,255,0.6);
     overflow: hidden; margin-bottom: 28px;
   }
-  .table-wrap { overflow-x: auto; max-height: 520px; overflow-y: auto; }
+  .table-wrap { overflow-x: auto; max-height: 680px; overflow-y: auto; }
   .data-table { width: 100%; border-collapse: collapse; min-width: 1160px; table-layout: fixed; }
   .data-table th {
     text-align: left; padding: 14px 16px; font-size: 11px; font-weight: 600;
@@ -329,6 +329,136 @@
   .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
   @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-10px); opacity: 1; } }
 
+  /* Batch operations toolbar */
+  .batch-bar {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+    background: rgba(0,113,227,0.04); border-bottom: 1px solid var(--separator);
+    font-size: 13px; flex-wrap: wrap;
+  }
+  .batch-bar.hidden { display: none; }
+  .batch-count { font-weight: 600; color: var(--accent); }
+  .btn-batch {
+    padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 8px;
+    cursor: pointer; border: none; transition: all 0.15s;
+  }
+  .btn-batch.close { background: var(--green); color: #fff; }
+  .btn-batch.close:hover { background: #1b8c3c; }
+  .btn-batch.reopen { background: var(--orange); color: #fff; }
+  .btn-batch.reopen:hover { background: #cc7a00; }
+  .btn-batch.cancel { background: #e8e8ed; color: var(--text-secondary); }
+  .btn-batch.cancel:hover { background: #d1d1d6; }
+
+  /* Inline editable cells */
+  .editable { cursor: pointer; border-radius: 4px; transition: background 0.15s; }
+  .editable:hover { background: rgba(0,113,227,0.08); }
+  .editable.editing { background: rgba(0,113,227,0.12); padding: 2px 4px; }
+  .editable select, .editable input { font-size: 12px; border: 1px solid var(--accent); border-radius: 4px; padding: 2px 4px; font-family: var(--font); }
+
+  /* Status toggle */
+  .status-toggle { cursor: pointer; display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; transition: all 0.15s; }
+  .status-toggle:hover { opacity: 0.8; transform: scale(1.05); }
+
+  /* Follow-up notes timeline */
+  .timeline { position: relative; padding-left: 20px; }
+  .timeline::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: var(--separator); }
+  .timeline-item { position: relative; margin-bottom: 12px; padding-left: 12px; }
+  .timeline-item::before { content: ''; position: absolute; left: -17px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .timeline-date { font-size: 11px; color: var(--text-secondary); margin-bottom: 2px; }
+  .timeline-note { font-size: 13px; line-height: 1.6; }
+  .timeline-author { font-size: 11px; color: var(--accent); font-weight: 500; }
+  .note-input-row { display: flex; gap: 8px; margin-top: 12px; }
+  .note-input-row input { flex: 1; padding: 8px 12px; font-size: 13px; border: 1px solid #d1d1d6; border-radius: 8px; font-family: var(--font); outline: none; }
+  .note-input-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.12); }
+  .btn-add-note { padding: 8px 16px; font-size: 12px; font-weight: 600; background: var(--accent); color: #fff; border: none; border-radius: 8px; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+  .btn-add-note:hover { background: var(--accent-hover); }
+
+  /* Form modal */
+  .form-modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 400;
+    background: rgba(0,0,0,0.35); backdrop-filter: blur(6px);
+    align-items: flex-start; justify-content: center; padding-top: 40px;
+    overflow-y: auto;
+  }
+  .form-modal-overlay.show { display: flex; }
+  .form-modal-box {
+    background: #fff; border-radius: 20px; width: 620px; max-width: 94vw;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.2); overflow: hidden;
+    margin-bottom: 40px;
+  }
+  .form-modal-box h3 { font-size: 16px; font-weight: 700; padding: 20px 24px 0; }
+  .form-modal-box .form-desc { font-size: 12px; color: var(--text-secondary); padding: 4px 24px 16px; }
+  .form-body { padding: 0 24px 20px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .form-row.single { grid-template-columns: 1fr; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label { font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.3px; }
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 9px 12px; font-size: 13px; border: 1px solid #d1d1d6; border-radius: 10px;
+    outline: none; font-family: var(--font); color: var(--text); transition: all 0.15s;
+    background: #fff;
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.12);
+  }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; padding: 0 24px 20px; }
+  .btn-form {
+    padding: 10px 22px; font-size: 13px; font-weight: 600; border-radius: 10px;
+    cursor: pointer; border: none; transition: all 0.15s;
+  }
+  .btn-form.primary { background: var(--accent); color: #fff; }
+  .btn-form.primary:hover { background: var(--accent-hover); }
+  .btn-form.ghost { background: #e8e8ed; color: var(--text); }
+  .btn-form.ghost:hover { background: #d1d1d6; }
+  .btn-form.danger { background: var(--red); color: #fff; }
+  .btn-form.danger:hover { background: #e0352b; }
+
+  /* Clear confirmation */
+  .clear-warning { background: #fff5f5; border: 1px solid #fcc; border-radius: 12px; padding: 16px; margin-bottom: 16px; color: var(--red); font-size: 13px; line-height: 1.6; }
+  .clear-warning strong { font-size: 14px; }
+  .clear-confirm-input { width: 100%; padding: 10px 14px; font-size: 14px; border: 2px solid var(--red); border-radius: 10px; outline: none; font-family: var(--font); text-align: center; letter-spacing: 2px; }
+  .clear-confirm-input:focus { box-shadow: 0 0 0 3px rgba(255,59,48,0.15); }
+  .clear-step-indicator { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 13px; font-weight: 600; }
+  .clear-step-num { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: var(--red); color: #fff; }
+
+  /* Operation log */
+  .op-log-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .op-log-table th { text-align: left; padding: 10px 16px; font-size: 10px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; border-bottom: 1px solid var(--separator); background: rgba(245,245,247,0.6); }
+  .op-log-table td { padding: 8px 16px; border-bottom: 1px solid #f0f0f2; vertical-align: top; }
+  .op-log-table .op-action { font-weight: 600; }
+  .op-log-table .op-action.create { color: var(--green); }
+  .op-log-table .op-action.update { color: var(--accent); }
+  .op-log-table .op-action.delete { color: var(--red); }
+  .op-log-table .op-action.batch { color: var(--purple); }
+  .op-log-table .op-action.clear { color: var(--red); font-weight: 700; }
+
+  /* Action buttons in table */
+  .action-btns { display: flex; gap: 4px; align-items: center; }
+  .btn-row-action {
+    padding: 3px 8px; font-size: 11px; font-weight: 500; border-radius: 6px;
+    cursor: pointer; border: none; transition: all 0.15s; white-space: nowrap;
+  }
+  .btn-row-action.edit { background: rgba(0,113,227,0.1); color: var(--accent); }
+  .btn-row-action.edit:hover { background: rgba(0,113,227,0.2); }
+  .btn-row-action.note { background: rgba(52,199,89,0.1); color: #1b8c3c; }
+  .btn-row-action.note:hover { background: rgba(52,199,89,0.2); }
+
+  /* Quick daily registration */
+  .btn-daily-register {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; font-size: 12px; font-weight: 600;
+    background: var(--green); color: #fff; border: none; border-radius: 10px;
+    cursor: pointer; transition: all 0.2s; margin-left: 12px;
+  }
+  .btn-daily-register:hover { background: #1b8c3c; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(52,199,89,0.3); }
+
+  /* Table checkbox */
+  .row-checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+
+  /* Operator name */
+  .operator-name-display { font-size: 11px; color: var(--text-secondary); margin-left: 8px; cursor: pointer; }
+  .operator-name-display:hover { color: var(--accent); }
+
   @media (max-width: 1200px) {
     .kpi-row { grid-template-columns: repeat(3, 1fr); }
     .analysis-row { grid-template-columns: 1fr 1fr; }
@@ -357,6 +487,10 @@
       <button class="year-btn active" data-year="2026">2026</button>
     </div>
     <button class="btn-settings" id="btnSettings" title="AI 分析设置">⚙️</button>
+    <button class="btn-upload" id="btnDailyRegister" title="手动登记当日业务量" style="background:var(--green);margin-right:4px">📊 登记业务量</button>
+    <button class="btn-upload" id="btnAddRecord" title="手动新增异常记录" style="margin-right:4px">＋ 新增登记</button>
+    <button class="btn-upload" id="btnOpLog" title="查看操作日志" style="background:#5856d6;margin-right:4px">📜 操作日志</button>
+    <span class="operator-name-display" id="operatorName" title="点击修改操作人名称">👤 匿名</span>
     <button class="btn-reset" id="btnReset" title="清除所有数据" style="display:none;padding:9px 14px;font-size:12px;font-weight:500;background:none;border:1px solid #d1d1d6;border-radius:10px;cursor:pointer;color:var(--text-secondary);transition:all 0.2s">🗑 清零</button>
     <button class="btn-upload" id="btnUpload" title="口岸单位上传Excel更新数据">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -380,6 +514,163 @@
     <div class="modal-actions">
       <button class="btn-sm ghost" id="btnSettingsCancel">取消</button>
       <button class="btn-sm primary" id="btnSettingsSave">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="form-modal-overlay" id="addRecordModal">
+  <div class="form-modal-box">
+    <h3>📝 新增异常登记</h3>
+    <div class="form-desc">手动登记一条异常记录，提交后立即保存到云端数据库</div>
+    <div class="form-body">
+      <div class="form-row">
+        <div class="form-group"><label>日期 *</label><input type="date" id="addDate"></div>
+        <div class="form-group"><label>异常类别 *</label><select id="addCategory"><option value="">请选择</option><option>查验</option><option>删改单</option><option>退柜</option><option>删改单/退柜</option><option>其他</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>事业部</label><select id="addBizUnit"><option value="">请选择</option></select></div>
+        <div class="form-group"><label>经营单位</label><input type="text" id="addCompany" placeholder="公司名称"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>进出口</label><select id="addImportExport"><option value="">请选择</option><option>进口</option><option>出口</option></select></div>
+        <div class="form-group"><label>报关单号</label><input type="text" id="addCustomsNo" placeholder="报关单号"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>提运单号</label><input type="text" id="addBolNo" placeholder="提运单号"></div>
+        <div class="form-group"><label>柜号</label><input type="text" id="addContainerNo" placeholder="柜号"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>责任方</label><select id="addResponsible"><option value="">请选择</option><option>海关系统</option><option>代理</option><option>美的</option><option>船公司</option><option>码头</option><option>车队</option><option>其他</option></select></div>
+        <div class="form-group"><label>费用</label><input type="text" id="addFee" placeholder="异常费用"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>代理</label><input type="text" id="addAgent" placeholder="代理名称"></div>
+        <div class="form-group"><label>闭环状态</label><select id="addStatus"><option value="未闭环">🔴 未闭环</option><option value="已闭环">🟢 已闭环</option></select></div>
+      </div>
+      <div class="form-row single"><div class="form-group"><label>异常描述</label><textarea id="addDescription" placeholder="描述异常情况..." rows="2"></textarea></div></div>
+      <div class="form-row single"><div class="form-group"><label>处理进度</label><textarea id="addProgress" placeholder="当前处理进度..." rows="2"></textarea></div></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-form ghost" id="btnAddCancel">取消</button>
+      <button class="btn-form primary" id="btnAddSubmit">提交登记</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Record Modal -->
+<div class="form-modal-overlay" id="editRecordModal">
+  <div class="form-modal-box" style="width:640px;max-height:90vh;overflow-y:auto">
+    <h3>✏️ 编辑记录</h3>
+    <div class="form-desc" id="editRecordDesc">修改记录信息，只提交有变化的字段</div>
+    <div class="form-body">
+      <input type="hidden" id="editRecordId">
+      <div class="form-row">
+        <div class="form-group"><label>异常类别</label><select id="editCategory"><option value="">请选择</option><option>查验</option><option>删改单</option><option>退柜</option><option>删改单/退柜</option><option>其他</option></select></div>
+        <div class="form-group"><label>闭环状态</label><select id="editStatus"><option value="未闭环">🔴 未闭环</option><option value="已闭环">🟢 已闭环</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>责任方</label><select id="editResponsible"><option value="">请选择</option><option>海关系统</option><option>代理</option><option>美的</option><option>船公司</option><option>码头</option><option>车队</option><option>其他</option></select></div>
+        <div class="form-group"><label>费用</label><input type="text" id="editFee" placeholder="异常费用"></div>
+      </div>
+      <div class="form-row single"><div class="form-group"><label>处理进度</label><textarea id="editProgress" placeholder="处理进度..." rows="5" style="min-height:120px;font-size:14px;line-height:1.8"></textarea></div></div>
+      <div class="form-row single"><div class="form-group"><label>异常描述</label><textarea id="editDescription" placeholder="描述异常情况..." rows="3"></textarea></div></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-form danger" id="btnEditDelete">删除记录</button>
+      <button class="btn-form ghost" id="btnEditCancel">取消</button>
+      <button class="btn-form primary" id="btnEditSubmit">保存修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- Record Operation Log Modal -->
+<div class="form-modal-overlay" id="recordOpLogModal">
+  <div class="form-modal-box" style="width:720px">
+    <h3>📜 记录操作日志</h3>
+    <div class="form-desc" id="recordOpLogDesc">此记录的所有编辑历史</div>
+    <div style="max-height:460px;overflow-y:auto;padding:0 24px 16px;" id="recordOpLogContent"></div>
+    <div class="form-actions">
+      <button class="btn-form ghost" id="btnRecordOpLogClose">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- Daily Registration Modal -->
+<div class="form-modal-overlay" id="dailyRegisterModal">
+  <div class="form-modal-box" style="width:480px">
+    <h3>📊 登记今日业务量</h3>
+    <div class="form-desc">手动登记当日申报数据，如当日已有数据则会更新</div>
+    <div class="form-body">
+      <div class="form-row single">
+        <div class="form-group"><label>日期 *</label><input type="date" id="dailyDate"></div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group"><label>应申报总单量 *</label><input type="number" id="dailyDeclared" value="0" min="0" placeholder="当日应申报的总单量"></div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group"><label>审结未放行数</label><input type="number" id="dailyReview" value="0" min="0" placeholder="海关已审结但尚未放行的单量"></div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group"><label>已放行单量 *</label><input type="number" id="dailyReleased" value="0" min="0" placeholder="当日实际已放行的单量"></div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-form ghost" id="btnDailyCancel">取消</button>
+      <button class="btn-form primary" id="btnDailySubmit">保存业务量</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clear Confirmation Step 1 -->
+<div class="modal-overlay" id="clearModal1">
+  <div class="modal-box">
+    <div class="clear-step-indicator"><span class="clear-step-num">1</span> 第一步确认</div>
+    <h3>⚠️ 确定要清零所有数据吗？</h3>
+    <div class="clear-warning">
+      <strong>此操作不可撤销！</strong><br>
+      清零后所有业务数据、异常记录、跟进备注将被永久删除。<br>
+      请在下方输入 <b>确认清零</b> 后点击继续。
+    </div>
+    <div class="modal-body">
+      <input type="text" class="clear-confirm-input" id="clearInput1" placeholder="请输入：确认清零" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sm ghost" id="btnClear1Cancel">取消</button>
+      <button class="btn-sm primary" id="btnClear1Next" disabled style="background:var(--red)">继续 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clear Confirmation Step 2 -->
+<div class="modal-overlay" id="clearModal2">
+  <div class="modal-box">
+    <div class="clear-step-indicator"><span class="clear-step-num">2</span> 最终确认</div>
+    <h3>🛑 再次确认：清零所有数据</h3>
+    <div class="clear-warning">
+      <strong>这是最后一步确认！</strong><br>
+      再次输入 <b>确认清零</b> 后，系统将永久删除所有数据并记录操作日志。<br>
+      此操作完成后数据无法恢复。
+    </div>
+    <div class="modal-body">
+      <input type="text" class="clear-confirm-input" id="clearInput2" placeholder="请再次输入：确认清零" autocomplete="off">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-sm ghost" id="btnClear2Cancel">取消</button>
+      <button class="btn-sm primary" id="btnClear2Confirm" disabled style="background:var(--red)">确认清零所有数据</button>
+    </div>
+  </div>
+</div>
+
+<!-- Operation Log Modal -->
+<div class="form-modal-overlay" id="opLogModal">
+  <div class="form-modal-box" style="width:720px">
+    <h3>📜 操作日志</h3>
+    <div class="form-desc">最近操作记录，所有数据变更均被永久记录</div>
+    <div style="max-height:460px;overflow-y:auto;padding:0 24px 16px;">
+      <div id="opLogContent" style="text-align:center;padding:40px;color:var(--text-secondary)">加载中...</div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-form ghost" id="btnOpLogClose">关闭</button>
     </div>
   </div>
 </div>
@@ -416,7 +707,7 @@
     </div>
     <div style="overflow-x:auto;">
       <table class="detail-table">
-        <thead><tr><th style="width:60px">序号</th><th style="width:200px">单号</th><th>未放行原因</th></tr></thead>
+        <thead><tr><th style="width:50px">序号</th><th style="width:190px">单号</th><th>未放行原因</th><th style="width:130px">操作</th></tr></thead>
         <tbody id="detailBody"></tbody>
       </table>
     </div>
@@ -429,6 +720,12 @@
   </div>
   <div class="table-card">
     <div class="summary-bar" id="summaryBar"></div>
+    <div class="batch-bar hidden" id="batchBar">
+      <span>已选择 <span class="batch-count" id="batchCount">0</span> 条</span>
+      <button class="btn-batch close" id="btnBatchClose">✅ 批量标记已闭环</button>
+      <button class="btn-batch reopen" id="btnBatchReopen">🔄 批量标记未闭环</button>
+      <button class="btn-batch cancel" id="btnBatchCancel">取消选择</button>
+    </div>
     <div class="filter-bar" id="filterBar"></div>
     <div class="table-wrap">
       <table class="data-table" id="abnormalTable">
@@ -476,7 +773,7 @@ if (typeof ChartDataLabels !== 'undefined') {
 Chart.defaults.plugins.datalabels = { display: false };
 
 // ==================== GLOBAL STATE ====================
-const DATA_VERSION = 3;
+const DATA_VERSION = 4;
 let appData = { '2025': null, '2026': null };
 let currentYear = '2026';
 let monthlyChart = null, bizUnitChart = null, categoryChart = null;
@@ -486,12 +783,17 @@ let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭�
 let abnormalSort = { field: null, asc: true };
 let apiKey = '';
 let aiCache = null;
+let batchSelected = new Set();
+let operatorName = '匿名';
 // Cloud API server — deployed at Render. All users share data through this.
-// Local dev: uses localhost. Production (GitHub Pages): uses deployed server.
-const IS_DEV = window.location.hostname === 'localhost' || window.location.hostname.startsWith('192.168.');
-// Cloud API server. Deploy to Render for 24/7 availability (see README.md).
-// After deploying, replace the URL below with your Render URL.
+const IS_DEV = window.location.protocol === 'file:' ||
+               window.location.hostname === 'localhost' ||
+               window.location.hostname === '127.0.0.1' ||
+               window.location.hostname.startsWith('192.168.') ||
+               window.location.hostname.startsWith('10.') ||
+               /^172\.(1[6-9]|2\d|3[01])\./.test(window.location.hostname);
 const API_SERVER = IS_DEV ? window.location.origin : 'https://midea-customs-dashboard.onrender.com';
+console.log('[看板] IS_DEV=' + IS_DEV + ' API_SERVER=' + API_SERVER);
 
 // ==================== DATE UTILS ====================
 // Standard Excel serial → JS Date (works across timezones)
@@ -522,12 +824,11 @@ function saveTokens(aiKey) {
 async function init() {
   loadFromStorage();
   loadTokens();
-  // Try fetching cloud data (shared across all users)
+  loadOperatorName();
   const cloudLoaded = await fetchCloudData();
   if (!cloudLoaded) {
     console.log('No cloud data, using localStorage');
   }
-  // Always show the dashboard
   renderAll();
   bindEvents();
 }
@@ -556,12 +857,17 @@ async function fetchCloudData() {
 }
 
 async function pushToCloud(dataToSave) {
+  // Legacy function — use individual CRUD APIs instead
   try {
     const jsonStr = JSON.stringify(dataToSave);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const form = new FormData();
     form.append('file', blob, 'data.json');
-    const resp = await fetch(API_SERVER + '/api/upload', { method: 'POST', body: form });
+    const resp = await fetch(API_SERVER + '/api/upload?mode=replace', {
+      method: 'POST',
+      headers: { 'X-Operator': operatorName },
+      body: form
+    });
     if (resp.ok) {
       const result = await resp.json();
       console.log('Cloud sync OK:', result.message);
@@ -632,13 +938,67 @@ function bindEvents() {
   });
   document.getElementById('hiddenFileInput').addEventListener('change', handleFileUpload);
   document.getElementById('detailClose').addEventListener('click', closeDetail);
-  document.getElementById('btnReset').addEventListener('click', resetAllData);
+  document.getElementById('btnReset').addEventListener('click', startClearFlow);
   document.getElementById('btnSettings').addEventListener('click', openSettings);
   document.getElementById('btnSettingsSave').addEventListener('click', saveSettings);
   document.getElementById('btnSettingsCancel').addEventListener('click', closeSettings);
   document.getElementById('settingsModal').addEventListener('click', function(e) {
     if (e.target === this) closeSettings();
   });
+
+  // New operational buttons
+  document.getElementById('btnAddRecord').addEventListener('click', openAddRecordModal);
+  document.getElementById('btnAddCancel').addEventListener('click', closeAddRecordModal);
+  document.getElementById('btnAddSubmit').addEventListener('click', submitAddRecord);
+  document.getElementById('addRecordModal').addEventListener('click', function(e) {
+    if (e.target === this) closeAddRecordModal();
+  });
+
+  document.getElementById('btnEditCancel').addEventListener('click', closeEditModal);
+  document.getElementById('btnEditSubmit').addEventListener('click', submitEditRecord);
+  document.getElementById('btnEditDelete').addEventListener('click', deleteRecord);
+  document.getElementById('editRecordModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+  });
+
+  // Record operation log modal
+  document.getElementById('btnRecordOpLogClose').addEventListener('click', closeRecordOpLog);
+  document.getElementById('recordOpLogModal').addEventListener('click', function(e) {
+    if (e.target === this) closeRecordOpLog();
+  });
+
+  document.getElementById('btnDailyRegister').addEventListener('click', openDailyRegisterModal);
+  document.getElementById('btnDailyCancel').addEventListener('click', closeDailyRegisterModal);
+  document.getElementById('btnDailySubmit').addEventListener('click', submitDailyRegister);
+  document.getElementById('dailyRegisterModal').addEventListener('click', function(e) {
+    if (e.target === this) closeDailyRegisterModal();
+  });
+
+  // Batch operations
+  document.getElementById('btnBatchClose').addEventListener('click', () => batchUpdateStatus('已闭环'));
+  document.getElementById('btnBatchReopen').addEventListener('click', () => batchUpdateStatus('未闭环'));
+  document.getElementById('btnBatchCancel').addEventListener('click', clearBatchSelection);
+
+  // Clear flow
+  document.getElementById('btnClear1Cancel').addEventListener('click', closeClearFlow);
+  document.getElementById('btnClear1Next').addEventListener('click', advanceClearStep2);
+  document.getElementById('btnClear2Cancel').addEventListener('click', closeClearFlow);
+  document.getElementById('btnClear2Confirm').addEventListener('click', executeClear);
+  document.getElementById('clearInput1').addEventListener('input', watchClearInput1);
+  document.getElementById('clearInput2').addEventListener('input', watchClearInput2);
+  document.getElementById('clearModal1').addEventListener('click', function(e) { if (e.target === this) closeClearFlow(); });
+  document.getElementById('clearModal2').addEventListener('click', function(e) { if (e.target === this) closeClearFlow(); });
+
+  // Operation log
+  document.getElementById('btnOpLog').addEventListener('click', openOpLog);
+  document.getElementById('btnOpLogClose').addEventListener('click', closeOpLog);
+  document.getElementById('opLogModal').addEventListener('click', function(e) {
+    if (e.target === this) closeOpLog();
+  });
+
+  // Operator name
+  document.getElementById('operatorName').addEventListener('click', changeOperatorName);
+
   document.querySelectorAll('.year-btn').forEach(btn => {
     btn.addEventListener('click', () => switchYear(btn.dataset.year));
   });
@@ -665,85 +1025,532 @@ function saveSettings() {
   showToast(aiKey ? 'AI 分析已启用' : 'AI 密钥已清除，使用本地规则分析');
 }
 
-function resetAllData() {
-  if (!confirm('确定要清除所有数据吗？此操作不可撤销。')) return;
-  appData = { '2025': null, '2026': null };
-  localStorage.removeItem('midea_dashboard_data');
-  localStorage.removeItem('midea_api_key');
-  apiKey = '';
-  aiCache = null;
-  currentYear = '2026';
-  selectedDim = null;
-  abnormalRecords = [];
-  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
-  abnormalSort = { field: null, asc: true };
-  document.getElementById('detailPanel').classList.remove('show');
-  renderAll();
-  showToast('数据已清除，请上传新的 Excel 报表');
+// ==================== OPERATOR NAME ====================
+function loadOperatorName() {
+  try {
+    operatorName = localStorage.getItem('midea_operator_name') || '';
+  } catch(e) { operatorName = ''; }
+  if (!operatorName) {
+    operatorName = prompt('👤 请输入您的姓名（用于操作记录追溯）：', '') || '匿名';
+    if (operatorName) {
+      try { localStorage.setItem('midea_operator_name', operatorName); } catch(e) {}
+    } else {
+      operatorName = '匿名';
+    }
+  }
+  document.getElementById('operatorName').textContent = '👤 ' + operatorName;
+}
+
+function changeOperatorName() {
+  const name = prompt('请输入您的姓名（用于操作日志记录）：', operatorName);
+  if (name !== null && name.trim()) {
+    operatorName = name.trim();
+    try { localStorage.setItem('midea_operator_name', operatorName); } catch(e) {}
+    document.getElementById('operatorName').textContent = '👤 ' + operatorName;
+    showToast('操作人已设为：' + operatorName);
+  }
+}
+
+// ==================== NEW RECORD MODAL ====================
+function openAddRecordModal() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('addDate').value = today;
+  document.getElementById('addCategory').value = '';
+  document.getElementById('addBizUnit').value = '';
+  document.getElementById('addCompany').value = '';
+  document.getElementById('addImportExport').value = '';
+  document.getElementById('addCustomsNo').value = '';
+  document.getElementById('addBolNo').value = '';
+  document.getElementById('addContainerNo').value = '';
+  document.getElementById('addResponsible').value = '';
+  document.getElementById('addFee').value = '';
+  document.getElementById('addAgent').value = '';
+  document.getElementById('addStatus').value = '未闭环';
+  document.getElementById('addDescription').value = '';
+  document.getElementById('addProgress').value = '';
+  // Populate bizUnit dropdown from current data
+  const bizUnits = [...new Set(abnormalRecords.map(r => r.bizUnit).filter(Boolean))].sort();
+  const sel = document.getElementById('addBizUnit');
+  sel.innerHTML = '<option value="">请选择</option>' + bizUnits.map(u => `<option>${u}</option>`).join('');
+  document.getElementById('addRecordModal').classList.add('show');
+}
+
+function closeAddRecordModal() {
+  document.getElementById('addRecordModal').classList.remove('show');
+}
+
+async function submitAddRecord() {
+  const date = document.getElementById('addDate').value;
+  const category = document.getElementById('addCategory').value;
+  if (!date || !category) {
+    showToast('请至少填写日期和异常类别');
+    return;
+  }
+  const record = {
+    date, category,
+    bizUnit: document.getElementById('addBizUnit').value,
+    company: document.getElementById('addCompany').value,
+    importExport: document.getElementById('addImportExport').value,
+    customsNo: document.getElementById('addCustomsNo').value,
+    bolNo: document.getElementById('addBolNo').value,
+    containerNo: document.getElementById('addContainerNo').value,
+    responsible: document.getElementById('addResponsible').value,
+    fee: document.getElementById('addFee').value,
+    agent: document.getElementById('addAgent').value,
+    status: document.getElementById('addStatus').value,
+    description: document.getElementById('addDescription').value,
+    progress: document.getElementById('addProgress').value
+  };
+  try {
+    record._operator = operatorName;
+    const resp = await fetch(API_SERVER + '/api/abnormal-records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record)
+    });
+    const result = await resp.json();
+    if (result.success) {
+      showToast('✅ 异常记录已登记 · 序号 ' + result.seq);
+      closeAddRecordModal();
+      await fetchCloudData();
+      renderAll();
+    } else {
+      showToast('登记失败: ' + (result.error || '未知错误'));
+    }
+  } catch(e) {
+    showToast('服务器请求失败: ' + e.message);
+  }
+}
+
+// ==================== EDIT RECORD MODAL ====================
+function openEditModalById(recordId) {
+  const record = abnormalRecords.find(r => r.id === recordId);
+  if (!record) { showToast('未找到该记录'); return; }
+
+  document.getElementById('editRecordId').value = recordId;
+  document.getElementById('editRecordDesc').textContent = `${record.company || '—'} · ${record.customsNo || '—'} · ${record.date || '—'}`;
+  document.getElementById('editCategory').value = record.category || '';
+  document.getElementById('editStatus').value = (record.status && record.status.includes('未闭环')) ? '未闭环' : '已闭环';
+  document.getElementById('editResponsible').value = record.responsible || '';
+  document.getElementById('editFee').value = record.fee || '';
+  document.getElementById('editDescription').value = record.description || '';
+  document.getElementById('editProgress').value = record.progress || '';
+
+  document.getElementById('editRecordModal').classList.add('show');
+}
+
+function closeEditModal() {
+  document.getElementById('editRecordModal').classList.remove('show');
+}
+
+// ==================== RECORD OPERATION LOG ====================
+async function openRecordOpLog(recordId) {
+  const record = abnormalRecords.find(r => r.id === recordId);
+  const desc = record ? `${record.company || '—'} · ${record.customsNo || '—'}` : recordId;
+  document.getElementById('recordOpLogDesc').textContent = desc;
+  document.getElementById('recordOpLogContent').innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+  document.getElementById('recordOpLogModal').classList.add('show');
+
+  const fieldLabels = {
+    'status': '闭环状态', 'category': '异常类别', 'bizUnit': '事业部',
+    'company': '经营单位', 'responsible': '责任方', 'fee': '费用',
+    'description': '异常描述', 'progress': '处理进度', 'agent': '代理',
+    'customsNo': '报关单号', 'bolNo': '提运单号', 'importExport': '进出口',
+    'date': '日期', 'containerNo': '柜号'
+  };
+
+  try {
+    const res = await fetch(API_SERVER + '/api/operations?record_id=' + encodeURIComponent(recordId) + '&limit=50');
+    const ops = await res.json();
+    if (!ops || ops.length === 0) {
+      document.getElementById('recordOpLogContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary);font-size:13px">暂无操作记录</div>';
+      return;
+    }
+    const actionLabels = {
+      'create': '新增', 'update': '编辑', 'delete': '删除',
+      'batch_update': '批量更新', 'add_note': '添加备注',
+      'create_daily': '登记日报', 'update_daily': '更新日报',
+      'release_item': '放行', 'transfer_item': '转异常'
+    };
+    document.getElementById('recordOpLogContent').innerHTML = `
+      <table class="op-log-table">
+        <thead><tr><th style="width:135px">时间</th><th style="width:65px">操作</th><th style="width:60px">操作人</th><th>变更明细</th></tr></thead>
+        <tbody>${ops.map(op => {
+          let changesHtml = '';
+          try {
+            const changes = typeof op.changes === 'string' ? JSON.parse(op.changes) : (op.changes || {});
+            if (op.action === 'update') {
+              const rows = [];
+              for (const [field, val] of Object.entries(changes)) {
+                if (field === 'ids' || field === 'count' || field === 'summaries' || field === '_operator') continue;
+                if (field === 'new_status' || field === 'new') continue;
+                const label = fieldLabels[field] || field;
+                if (typeof val === 'object' && val !== null && 'old' in val && 'new' in val) {
+                  const oldDisplay = val.old || '(空)';
+                  const newDisplay = val.new || '(空)';
+                  rows.push(`<div style="margin-bottom:3px"><b>${label}</b>: <span style="color:var(--red);text-decoration:line-through">${escapeHtml(String(oldDisplay))}</span> → <span style="color:var(--green);font-weight:600">${escapeHtml(String(newDisplay))}</span></div>`);
+                }
+              }
+              changesHtml = rows.join('') || `<div>${escapeHtml(op.record_summary || '')}</div>`;
+            } else if (op.action === 'batch_update') {
+              const newStatus = changes.new_status || changes.status || '';
+              changesHtml = `<div>批量标记 <b>${escapeHtml(String(newStatus))}</b> · ${changes.count || 0}条</div>`;
+            } else if (op.action === 'create') {
+              changesHtml = `<div>新建记录: ${escapeHtml(op.record_summary || '')}</div>`;
+            } else if (op.action === 'delete') {
+              changesHtml = `<div style="color:var(--red)">删除记录</div>`;
+            } else if (op.action === 'release_item') {
+              changesHtml = `<div>✅ 标记放行: ${escapeHtml(op.record_summary || '')}</div>`;
+            } else if (op.action === 'transfer_item') {
+              changesHtml = `<div>📋 转为异常记录: ${escapeHtml(op.record_summary || '')}</div>`;
+            } else {
+              changesHtml = `<div>${escapeHtml(op.record_summary || '')}</div>`;
+            }
+          } catch(e) { changesHtml = escapeHtml(op.record_summary || ''); }
+          return `<tr>
+            <td style="font-size:11px">${(op.timestamp || '').replace('T', ' ').substring(0, 16)}</td>
+            <td><span class="op-action ${op.action === 'delete' ? 'delete' : op.action === 'create' ? 'create' : ''}">${actionLabels[op.action] || op.action}</span></td>
+            <td style="font-weight:500">${escapeHtml(op.operator || '匿名')}</td>
+            <td style="line-height:1.7">${changesHtml}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+  } catch(e) {
+    document.getElementById('recordOpLogContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--red)">加载失败: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function closeRecordOpLog() {
+  document.getElementById('recordOpLogModal').classList.remove('show');
+}
+
+async function submitEditRecord() {
+  const recordId = document.getElementById('editRecordId').value;
+  const updates = {};
+  const cat = document.getElementById('editCategory').value;
+  const st = document.getElementById('editStatus').value;
+  const resp = document.getElementById('editResponsible').value;
+  const fee = document.getElementById('editFee').value;
+  const desc = document.getElementById('editDescription').value;
+  const prog = document.getElementById('editProgress').value;
+
+  if (cat) updates.category = cat;
+  if (st) updates.status = st;
+  updates.responsible = resp;
+  updates.fee = fee;
+  updates.description = desc;
+  updates.progress = prog;
+
+  try {
+    updates._operator = operatorName;
+    const res = await fetch(API_SERVER + '/api/abnormal-records/' + recordId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    const result = await res.json();
+    if (result.success) {
+      showToast('✅ 记录已更新');
+      closeEditModal();
+      await fetchCloudData();
+      renderAll();
+    } else {
+      showToast('更新失败: ' + (result.error || '未知错误'));
+    }
+  } catch(e) {
+    showToast('服务器请求失败: ' + e.message);
+  }
+}
+
+async function deleteRecord() {
+  const recordId = document.getElementById('editRecordId').value;
+  if (!confirm('确定要删除这条记录吗？此操作可以恢复（软删除）。')) return;
+  try {
+    const res = await fetch(API_SERVER + '/api/abnormal-records/' + recordId, {
+      method: 'DELETE',
+      headers: { 'X-Operator': operatorName }
+    });
+    const result = await res.json();
+    if (result.success) {
+      showToast('记录已删除');
+      closeEditModal();
+      await fetchCloudData();
+      renderAll();
+    } else {
+      showToast('删除失败: ' + (result.error || '未知错误'));
+    }
+  } catch(e) {
+    showToast('服务器请求失败: ' + e.message);
+  }
+}
+
+// ==================== DAILY REGISTRATION ====================
+function openDailyRegisterModal() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('dailyDate').value = today;
+  document.getElementById('dailyDeclared').value = '';
+  document.getElementById('dailyReleased').value = '';
+  document.getElementById('dailyReview').value = '0';
+  document.getElementById('dailyRegisterModal').classList.add('show');
+}
+
+function closeDailyRegisterModal() {
+  document.getElementById('dailyRegisterModal').classList.remove('show');
+}
+
+async function submitDailyRegister() {
+  const date = document.getElementById('dailyDate').value;
+  const declared = parseInt(document.getElementById('dailyDeclared').value) || 0;
+  const released = parseInt(document.getElementById('dailyReleased').value) || 0;
+  if (!date || (declared === 0 && released === 0)) {
+    showToast('请填写日期和至少一项业务量数据');
+    return;
+  }
+  try {
+    const res = await fetch(API_SERVER + '/api/daily-records', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date,
+        totalDeclared: declared,
+        totalReleased: released,
+        reviewCompleted: parseInt(document.getElementById('dailyReview').value) || 0,
+        unclearedReason: '',
+        _operator: operatorName
+      })
+    });
+    const result = await res.json();
+    if (result.success) {
+      showToast('✅ 业务量已' + (result.action === 'updated' ? '更新' : '登记'));
+      closeDailyRegisterModal();
+      await fetchCloudData();
+      renderAll();
+    } else {
+      showToast('保存失败: ' + (result.error || '未知错误'));
+    }
+  } catch(e) {
+    showToast('服务器请求失败: ' + e.message);
+  }
+}
+
+// ==================== BATCH OPERATIONS ====================
+function handleCheckboxChange(recordId, checked, idx) {
+  if (checked) {
+    batchSelected.add(recordId);
+  } else {
+    batchSelected.delete(recordId);
+  }
+  updateBatchBar();
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.row-cb').forEach(cb => {
+    cb.checked = checked;
+    if (checked) {
+      batchSelected.add(cb.dataset.id);
+    } else {
+      batchSelected.delete(cb.dataset.id);
+    }
+  });
+  updateBatchBar();
+}
+
+function updateBatchBar() {
+  const bar = document.getElementById('batchBar');
+  const count = document.getElementById('batchCount');
+  count.textContent = batchSelected.size;
+  if (batchSelected.size > 0) {
+    bar.classList.remove('hidden');
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+function clearBatchSelection() {
+  batchSelected.clear();
+  document.querySelectorAll('.row-cb').forEach(cb => { cb.checked = false; });
+  const selectAll = document.getElementById('selectAll');
+  if (selectAll) selectAll.checked = false;
+  updateBatchBar();
+}
+
+async function batchUpdateStatus(newStatus) {
+  if (batchSelected.size === 0) { showToast('请先选择记录'); return; }
+  if (!confirm(`确定要批量标记 ${batchSelected.size} 条记录为「${newStatus}」吗？`)) return;
+  try {
+    const res = await fetch(API_SERVER + '/api/abnormal-records/batch-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: Array.from(batchSelected), status: newStatus, _operator: operatorName })
+    });
+    const result = await res.json();
+    if (result.success) {
+      showToast(`✅ 已批量更新 ${result.updated} 条记录为「${newStatus}」`);
+      clearBatchSelection();
+      await fetchCloudData();
+      renderAll();
+    } else {
+      showToast('批量更新失败: ' + (result.error || '未知错误'));
+    }
+  } catch(e) {
+    showToast('服务器请求失败: ' + e.message);
+  }
+}
+
+// ==================== CLEAR FLOW (double confirmation) ====================
+function startClearFlow() {
+  document.getElementById('clearInput1').value = '';
+  document.getElementById('btnClear1Next').disabled = true;
+  document.getElementById('clearModal1').classList.add('show');
+}
+
+function watchClearInput1() {
+  document.getElementById('btnClear1Next').disabled = document.getElementById('clearInput1').value !== '确认清零';
+}
+
+function advanceClearStep2() {
+  document.getElementById('clearModal1').classList.remove('show');
+  document.getElementById('clearInput2').value = '';
+  document.getElementById('btnClear2Confirm').disabled = true;
+  document.getElementById('clearModal2').classList.add('show');
+}
+
+function watchClearInput2() {
+  document.getElementById('btnClear2Confirm').disabled = document.getElementById('clearInput2').value !== '确认清零';
+}
+
+function closeClearFlow() {
+  document.getElementById('clearModal1').classList.remove('show');
+  document.getElementById('clearModal2').classList.remove('show');
+}
+
+async function executeClear() {
+  try {
+    const res = await fetch(API_SERVER + '/api/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmation: '确认清零所有数据', _operator: operatorName })
+    });
+    const result = await res.json();
+    if (result.success) {
+      showToast('数据已清零 · ' + result.message);
+      closeClearFlow();
+      appData = { '2025': null, '2026': null };
+      localStorage.removeItem('midea_dashboard_data');
+      currentYear = '2026';
+      selectedDim = null;
+      abnormalRecords = [];
+      abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
+      abnormalSort = { field: null, asc: true };
+      batchSelected.clear();
+      document.getElementById('detailPanel').classList.remove('show');
+      renderAll();
+    } else {
+      showToast('清零失败: ' + (result.error || '未知错误'));
+    }
+  } catch(e) {
+    showToast('服务器请求失败: ' + e.message);
+  }
+}
+
+// ==================== OPERATION LOG ====================
+async function openOpLog() {
+  document.getElementById('opLogModal').classList.add('show');
+  document.getElementById('opLogContent').innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+  try {
+    const res = await fetch(API_SERVER + '/api/operations?limit=100');
+    const ops = await res.json();
+    if (!ops || ops.length === 0) {
+      document.getElementById('opLogContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-secondary)">暂无操作记录</div>';
+      return;
+    }
+    const actionLabels = {
+      'create': '新增记录', 'update': '更新记录', 'delete': '删除记录',
+      'batch_update': '批量更新', 'add_note': '添加备注', 'upload': '上传数据',
+      'migrate': '数据迁移', 'clear': '清零数据',
+      'create_daily': '登记日报', 'update_daily': '更新日报'
+    };
+    const actionClasses = {
+      'create': 'create', 'delete': 'delete', 'update': 'update',
+      'batch_update': 'batch', 'clear': 'clear'
+    };
+    document.getElementById('opLogContent').innerHTML = `
+      <table class="op-log-table">
+        <thead><tr><th style="width:140px">时间</th><th style="width:80px">操作</th><th style="width:70px">操作人</th><th>内容</th></tr></thead>
+        <tbody>${ops.map(op => `
+          <tr>
+            <td>${(op.timestamp || '').replace('T', ' ').substring(0, 16)}</td>
+            <td><span class="op-action ${actionClasses[op.action] || ''}">${actionLabels[op.action] || op.action}</span></td>
+            <td>${escapeHtml(op.operator || '匿名')}</td>
+            <td>${escapeHtml(op.record_summary || '')}</td>
+          </tr>
+        `).join('')}</tbody>
+      </table>`;
+  } catch(e) {
+    document.getElementById('opLogContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--red)">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function closeOpLog() {
+  document.getElementById('opLogModal').classList.remove('show');
 }
 
 // ==================== FILE UPLOAD & PARSE ====================
 async function handleFileUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
-  showToast('正在解析文件...');
-  const reader = new FileReader();
-  reader.onload = async function(ev) {
-    try {
-      const wb = XLSX.read(ev.target.result, { type: 'array' });
-      const parsed = parseWorkbook(wb);
-      if (!parsed || Object.keys(parsed).length === 0) {
-        showToast('未在文件中找到有效数据');
-        return;
-      }
+  showToast('正在上传文件到服务器解析...');
 
-      // Full replace — latest upload is the single source of truth
-      for (const year of ['2025', '2026']) {
-        if (parsed[year]) {
-          appData[year] = parsed[year];
-        } else {
-          appData[year] = null;
+  // Upload to server (merge mode by default — won't overwrite manual edits)
+  const serverResult = await uploadExcelToServer(file);
+  if (serverResult.success) {
+    showToast(`✅ 数据已同步 · ${serverResult.message}`);
+  } else {
+    // Fallback: parse locally
+    showToast('服务器不可用，本地解析中...');
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array' });
+        const parsed = parseWorkbook(wb);
+        if (!parsed || Object.keys(parsed).length === 0) {
+          showToast('未在文件中找到有效数据');
+          return;
         }
+        for (const year of ['2025', '2026']) {
+          if (parsed[year]) appData[year] = parsed[year];
+        }
+        saveToStorage();
+        selectedDim = null;
+        document.getElementById('detailPanel').classList.remove('show');
+        renderAll();
+        showToast('数据已本地加载（服务器不可用）');
+      } catch(err) {
+        showToast('文件解析失败：' + (err.message || '未知错误'));
       }
+    };
+    reader.onerror = function() { showToast('文件读取失败，请重试'); };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+    return;
+  }
 
-      saveToStorage();
+  // Reload data from server
+  await fetchCloudData();
+  saveToStorage();
 
-      // Auto-switch to the year with the most recent data
-      const years = Object.keys(appData).filter(y => appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0).sort();
-      if (years.length > 0) {
-        currentYear = years[years.length - 1];
-        document.querySelectorAll('.year-btn').forEach(b =>
-          b.classList.toggle('active', b.dataset.year === currentYear)
-        );
-      }
+  const years = Object.keys(appData).filter(y => appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0).sort();
+  if (years.length > 0) {
+    currentYear = years[years.length - 1];
+    document.querySelectorAll('.year-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.year === currentYear)
+    );
+  }
 
-      // Push to cloud server — all visitors share this data
-      const serverResult = await uploadExcelToServer(file);
-      if (serverResult.success) {
-        showToast(`✅ 数据已更新并同步云端 · ${serverResult.totalDays} 天，${serverResult.totalAbnormal} 条异常 · 所有人可见`);
-      } else {
-        // Fallback: try legacy pushToCloud
-        const cloudData = {};
-        for (const y of ['2025', '2026']) { if (appData[y]) cloudData[y] = appData[y]; else cloudData[y] = null; }
-        const pushed = await pushToCloud(cloudData);
-        showToast(pushed ? '数据已同步云端' : '数据已更新（仅本地）· 云端暂不可用，请检查服务器');
-      }
+  selectedDim = null;
+  document.getElementById('detailPanel').classList.remove('show');
+  renderAll();
 
-      // Refresh
-      selectedDim = null;
-      document.getElementById('detailPanel').classList.remove('show');
-      renderAll();
-    } catch(err) {
-      console.error('Upload parse error:', err);
-      console.error('Error stack:', err.stack);
-      showToast('文件解析失败：' + (err.message || '未知错误，请查看控制台（F12）'));
-    }
-  };
-  reader.onerror = function(ev) {
-    console.error('FileReader error:', reader.error);
-    showToast('文件读取失败：' + (reader.error ? reader.error.message : '请重试'));
-  };
-  reader.readAsArrayBuffer(file);
   e.target.value = '';
 }
 
@@ -866,6 +1673,7 @@ function renderAll() {
   updateNavbar(data);
 
   abnormalRecords = (data && data.abnormalRecords) ? data.abnormalRecords : [];
+  batchSelected.clear();
 
   renderKPIs(data);
   renderCharts(data);
@@ -1231,8 +2039,9 @@ function renderAnalysis(data) {
 // ==================== INTELLIGENT INSIGHTS ====================
 function computeInsightStats(records) {
   const total = records.length;
-  const closed = records.filter(r => r.status && !r.status.includes('未闭环')).length;
-  const openCount = total - closed;
+  // Match table logic: empty status or anything not containing 未闭环 is closed
+  const openCount = records.filter(r => r.status && (r.status.includes('未闭环') || r.status.includes('未关闭'))).length;
+  const closed = total - openCount;
   const closeRate = total > 0 ? (closed / total * 100).toFixed(1) : 0;
 
   const catMap = {};
@@ -1550,7 +2359,18 @@ function renderDimensionCards(data) {
     return;
   }
 
-  const latest = data.dailyData[data.dailyData.length - 1];
+  // Find the most recent daily record with uncleared items (skip records with empty reason)
+  let latest = null;
+  for (let i = data.dailyData.length - 1; i >= 0; i--) {
+    const d = data.dailyData[i];
+    const reason = (d.unclearedReason || '').trim();
+    if (reason && reason !== '无') {
+      latest = d;
+      break;
+    }
+  }
+  if (!latest) latest = data.dailyData[data.dailyData.length - 1];
+
   const dimensions = parseUnclearedDimensions(latest.unclearedReason);
   document.getElementById('unclearedDate').textContent = `数据日期: ${latest.date}`;
 
@@ -1571,7 +2391,14 @@ function renderDimensionCards(data) {
 function selectDimension(idx) {
   const data = appData[currentYear];
   if (!data || !data.dailyData || !data.dailyData.length) return;
-  const latest = data.dailyData[data.dailyData.length - 1];
+  // Find latest record with uncleared items
+  let latest = null;
+  for (let i = data.dailyData.length - 1; i >= 0; i--) {
+    const d = data.dailyData[i];
+    const reason = (d.unclearedReason || '').trim();
+    if (reason && reason !== '无') { latest = d; break; }
+  }
+  if (!latest) latest = data.dailyData[data.dailyData.length - 1];
   const dimensions = parseUnclearedDimensions(latest.unclearedReason);
   if (idx >= dimensions.length || dimensions[idx].count === 0) return;
 
@@ -1584,27 +2411,105 @@ function selectDimension(idx) {
 function showDimensionDetail(idx) {
   const data = appData[currentYear];
   if (!data || !data.dailyData || !data.dailyData.length) return;
-  const latest = data.dailyData[data.dailyData.length - 1];
+  // Find latest record with uncleared items
+  let latest = null;
+  for (let i = data.dailyData.length - 1; i >= 0; i--) {
+    const d = data.dailyData[i];
+    const reason = (d.unclearedReason || '').trim();
+    if (reason && reason !== '无') { latest = d; break; }
+  }
+  if (!latest) latest = data.dailyData[data.dailyData.length - 1];
   const dimensions = parseUnclearedDimensions(latest.unclearedReason);
   if (idx >= dimensions.length) return;
 
   const dim = dimensions[idx];
   const icons = { air: '✈️', barge: '🚢', ship: '🛳️', road: '🚛', inspect: '🔍' };
+  const dailyRecordId = latest.id || '';
   document.getElementById('detailTitle').innerHTML = `${icons[dim.icon]} ${dim.key} — 未放行明细（${dim.count}条）`;
   document.getElementById('detailPanel').classList.add('show');
 
   if (dim.items.length === 0) {
-    document.getElementById('detailBody').innerHTML = '<tr><td colspan="3" style="text-align:center;padding:40px;color:var(--text-secondary);">无异常记录</td></tr>';
+    document.getElementById('detailBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:40px;color:var(--text-secondary);">无异常记录</td></tr>';
     return;
   }
 
   document.getElementById('detailBody').innerHTML = dim.items.map((item, i) => `
-    <tr>
+    <tr id="dimItem${i}">
       <td>${i + 1}</td>
-      <td class="mono" style="font-size:13px">${item.id}</td>
-      <td>${item.reason}</td>
+      <td class="mono" style="font-size:13px">${escapeHtml(item.id)}</td>
+      <td>${escapeHtml(item.reason)}</td>
+      <td>
+        <div class="action-btns">
+          <button class="btn-row-action edit" onclick="releaseDimensionItem('${escapeHtml(dailyRecordId)}','${escapeHtml(dim.key)}','${escapeHtml(item.id + ' ' + item.reason)}')" title="标记已放行">✅ 已放行</button>
+          <button class="btn-row-action note" onclick="transferDimensionItem('${escapeHtml(dailyRecordId)}','${escapeHtml(dim.key)}','${escapeHtml(item.id + ' ' + item.reason)}')" title="转异常跟进">📋 转问题</button>
+        </div>
+      </td>
     </tr>
   `).join('');
+}
+
+async function releaseDimensionItem(dailyRecordId, dimension, itemText) {
+  if (!dailyRecordId || dailyRecordId.length < 10) {
+    showToast('日报记录ID无效，请刷新页面后重试');
+    return;
+  }
+  if (!confirm(`确定「${itemText.split(' ')[0]}」已放行？\n将从未放行清单移除并增加放行计数。`)) return;
+  try {
+    const url = API_SERVER + '/api/daily-records/' + encodeURIComponent(dailyRecordId) + '/release-item';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dimension, item: itemText, _operator: operatorName })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      let errMsg = '服务器错误 ' + res.status;
+      try { const errJson = JSON.parse(errText); errMsg = errJson.error || errMsg; } catch(e) {}
+      throw new Error(errMsg);
+    }
+    const result = await res.json();
+    if (result.success) {
+      showToast('✅ 已标记放行');
+      await fetchCloudData();
+      renderAll();
+    } else {
+      showToast('操作失败: ' + (result.error || '未知'));
+    }
+  } catch(e) {
+    showToast('已放行操作失败: ' + (e.message || '网络异常，请检查服务器'));
+  }
+}
+
+async function transferDimensionItem(dailyRecordId, dimension, itemText) {
+  if (!dailyRecordId || dailyRecordId.length < 10) {
+    showToast('日报记录ID无效，请刷新页面后重试');
+    return;
+  }
+  if (!confirm(`确定将「${itemText.split(' ')[0]}」转为异常跟进？\n将从未放行清单移除并创建新异常记录。`)) return;
+  try {
+    const url = API_SERVER + '/api/daily-records/' + encodeURIComponent(dailyRecordId) + '/transfer-item';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dimension, item: itemText, _operator: operatorName })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      let errMsg = '服务器错误 ' + res.status;
+      try { const errJson = JSON.parse(errText); errMsg = errJson.error || errMsg; } catch(e) {}
+      throw new Error(errMsg);
+    }
+    const result = await res.json();
+    if (result.success) {
+      showToast('✅ 已转为异常记录 #' + result.abnormal_seq);
+      await fetchCloudData();
+      renderAll();
+    } else {
+      showToast('操作失败: ' + (result.error || '未知'));
+    }
+  } catch(e) {
+    showToast('转问题操作失败: ' + (e.message || '网络异常，请检查服务器'));
+  }
 }
 
 function closeDetail() {
@@ -1687,27 +2592,42 @@ function renderAbnormalTable(data) {
 
   // Table headers — widths tuned so all content stays single-line
   const columns = [
-    { key: 'seq', label: '序号', width: '52px' },
-    { key: 'date', label: '日期', width: '88px' },
-    { key: 'category', label: '异常类别', width: '80px' },
-    { key: 'bizUnit', label: '事业部', width: '72px' },
-    { key: 'company', label: '经营单位', width: '150px' },
-    { key: 'importExport', label: '进出口', width: '52px' },
-    { key: 'customsNo', label: '报关单号', width: '155px' },
-    { key: 'bolNo', label: '提运单号', width: '140px' },
-    { key: 'responsible', label: '责任方', width: '82px' },
-    { key: 'description', label: '异常描述', width: '160px' },
-    { key: 'status', label: '闭环情况', width: '72px' },
-    { key: 'action', label: '详情', width: '52px' }
+    { key: 'checkbox', label: '<input type="checkbox" class="row-checkbox" id="selectAll" title="全选">', width: '32px' },
+    { key: 'seq', label: '序号', width: '48px' },
+    { key: 'date', label: '日期', width: '82px' },
+    { key: 'category', label: '异常类别', width: '76px' },
+    { key: 'bizUnit', label: '事业部', width: '68px' },
+    { key: 'company', label: '经营单位', width: '136px' },
+    { key: 'importExport', label: '进出口', width: '48px' },
+    { key: 'customsNo', label: '报关单号', width: '140px' },
+    { key: 'bolNo', label: '提运单号', width: '128px' },
+    { key: 'responsible', label: '责任方', width: '78px' },
+    { key: 'description', label: '异常描述', width: '142px' },
+    { key: 'status', label: '闭环情况', width: '68px' },
+    { key: 'action', label: '操作', width: '90px' }
   ];
 
-  document.getElementById('abnormalTableHead').innerHTML = columns.map(col => `
-    <th style="width:${col.width};cursor:pointer" data-sort="${col.key}" onclick="sortTable('${col.key}')">
+  document.getElementById('abnormalTableHead').innerHTML = columns.map(col => {
+    if (col.key === 'checkbox') {
+      return `<th style="width:${col.width};text-align:center">${col.label}</th>`;
+    }
+    if (col.key === 'action') {
+      return `<th style="width:${col.width}">${col.label}</th>`;
+    }
+    return `<th style="width:${col.width};cursor:pointer" data-sort="${col.key}" onclick="sortTable('${col.key}')">
       ${col.label}<span class="sort-arrow">${abnormalSort.field===col.key?(abnormalSort.asc?'▲':'▼'):'⇅'}</span>
-    </th>
-  `).join('');
+    </th>`;
+  }).join('');
 
   renderTableBody();
+
+  // Bind select-all checkbox
+  const selectAll = document.getElementById('selectAll');
+  if (selectAll) {
+    selectAll.addEventListener('change', function() {
+      toggleSelectAll(this.checked);
+    });
+  }
 }
 
 function applyFilters() {
@@ -1752,14 +2672,26 @@ function renderTableBody() {
     });
   }
 
-  document.getElementById('abnormalTableBody').innerHTML = records.length === 0
-    ? '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text-secondary);">无匹配记录</td></tr>'
-    : records.map((r, i) => {
-        const catBadgeClass = r.category.includes('查验') ? 'badge-cat-inspect' :
-                              (r.category.includes('删改单')||r.category.includes('退柜')) ? 'badge-cat' : 'badge-cat-other';
-        const statusBadge = (r.status||'').includes('未闭环')
-          ? '<span class="badge badge-open">未闭环</span>' : '<span class="badge badge-closed">已闭环</span>';
+  // Filter records to only those with IDs for batch ops
+  const hasIds = records.every(r => r.id);
+
+  if (records.length === 0) {
+    document.getElementById('abnormalTableBody').innerHTML = '<tr><td colspan="13" style="text-align:center;padding:40px;color:var(--text-secondary);">无匹配记录</td></tr>';
+  } else {
+    document.getElementById('abnormalTableBody').innerHTML = records.map((r, i) => {
+        const catBadgeClass = (r.category||'').includes('查验') ? 'badge-cat-inspect' :
+                              ((r.category||'').includes('删改单')||(r.category||'').includes('退柜')) ? 'badge-cat' : 'badge-cat-other';
+        const isClosed = !(r.status||'').includes('未闭环');
+        const statusBadge = isClosed
+          ? '<span class="badge badge-closed status-toggle" title="点击切换状态">已闭环</span>'
+          : '<span class="badge badge-open status-toggle" title="点击切换状态">未闭环</span>';
+        const recordId = r.id || '';
+        const checked = batchSelected.has(recordId) ? ' checked' : '';
+        const hasNotes = (r.follow_up_notes && Array.isArray(r.follow_up_notes) && r.follow_up_notes.length > 0);
+        const noteCount = hasNotes ? r.follow_up_notes.length : 0;
+
         return `<tr id="abRow${i}">
+          <td style="text-align:center"><input type="checkbox" class="row-checkbox row-cb" data-id="${escapeHtml(recordId)}" data-idx="${i}" ${checked}></td>
           <td>${r.seq||'—'}</td>
           <td>${r.date||'—'}</td>
           <td><span class="badge ${catBadgeClass}">${r.category||'—'}</span></td>
@@ -1769,18 +2701,97 @@ function renderTableBody() {
           <td style="font-family:var(--font-mono);font-size:11px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(r.customsNo||'')}">${r.customsNo||'—'}</td>
           <td style="font-family:var(--font-mono);font-size:11px;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(r.bolNo||'')}">${r.bolNo||'—'}</td>
           <td>${r.responsible||'—'}</td>
-          <td style="overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(r.description||'')}">${r.description||'—'}</td>
+          <td style="overflow:hidden;text-overflow:ellipsis;max-width:140px" title="${escapeHtml(r.description||'')}">${r.description||'—'}</td>
           <td>${statusBadge}</td>
-          <td><button class="expand-btn" onclick="toggleRowDetail(${i},this)">展开</button></td>
+          <td>
+            <div class="action-btns">
+              <button class="expand-btn" onclick="toggleRowDetail(${i},this)">展开</button>
+              <button class="btn-row-action edit" onclick="openEditModalById('${escapeHtml(recordId)}')" title="编辑">✏️</button>
+              <button class="btn-row-action note" onclick="openRecordOpLog('${escapeHtml(recordId)}')" title="操作日志">📋</button>
+            </div>
+          </td>
         </tr>
         <tr id="abDetail${i}" style="display:none">
-          <td colspan="12"><div class="expand-detail">
-            <strong>异常描述：</strong>${escapeHtml(r.description||'—')}<br>
-            <strong>处理进度：</strong>${escapeHtml(r.progress||'—')}<br>
-            <strong>异常费用：</strong>${r.fee||'—'} &nbsp; <strong>代理：</strong>${r.agent||'—'} &nbsp; <strong>柜号：</strong>${r.containerNo||'—'}
+          <td colspan="13"><div class="expand-detail" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 24px;font-size:13px;line-height:1.8">
+            <div><strong>日期：</strong>${escapeHtml(r.date||'—')}</div>
+            <div><strong>类别：</strong>${escapeHtml(r.category||'—')}</div>
+            <div><strong>状态：</strong>${(r.status||'').includes('未闭环') ? '🔴 未闭环' : '🟢 已闭环'}</div>
+            <div><strong>事业部：</strong>${escapeHtml(r.bizUnit||'—')}</div>
+            <div><strong>经营单位：</strong>${escapeHtml(r.company||'—')}</div>
+            <div><strong>进出口：</strong>${escapeHtml(r.importExport||'—')}</div>
+            <div><strong>报关单号：</strong><span style="font-family:var(--font-mono);font-size:12px">${escapeHtml(r.customsNo||'—')}</span></div>
+            <div><strong>提运单号：</strong><span style="font-family:var(--font-mono);font-size:12px">${escapeHtml(r.bolNo||'—')}</span></div>
+            <div><strong>柜号：</strong>${escapeHtml(r.containerNo||'—')}</div>
+            <div><strong>责任方：</strong>${escapeHtml(r.responsible||'—')}</div>
+            <div><strong>费用：</strong>${escapeHtml(r.fee||'—')}</div>
+            <div><strong>代理：</strong>${escapeHtml(r.agent||'—')}</div>
+            <div style="grid-column:1/-1"><strong>异常描述：</strong>${escapeHtml(r.description||'—')}</div>
+            <div style="grid-column:1/-1"><strong>处理进度：</strong>${escapeHtml(r.progress||'—')}</div>
           </div></td>
         </tr>`;
       }).join('');
+  }
+
+  // Bind checkbox events
+  document.querySelectorAll('.row-cb').forEach(cb => {
+    cb.addEventListener('change', function() {
+      handleCheckboxChange(this.dataset.id, this.checked, this.dataset.idx);
+    });
+  });
+
+  // Bind status toggle - use event delegation for robustness
+  document.querySelectorAll('.status-toggle').forEach(el => {
+    el.addEventListener('click', async function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const row = this.closest('tr');
+      if (!row) return;
+      const cb = row.querySelector('.row-cb');
+      if (!cb || !cb.dataset.id) {
+        showToast('无法识别该记录，请刷新页面后重试');
+        return;
+      }
+      const recordId = cb.dataset.id;
+      const record = abnormalRecords.find(r => r.id === recordId);
+      if (!record) {
+        showToast('记录未找到，请刷新页面');
+        return;
+      }
+      const isCurrentlyClosed = !(record.status || '').includes('未闭环');
+      const newStatus = isCurrentlyClosed ? '未闭环' : '已闭环';
+      // Confirmation dialog
+      const company = record.company || '—';
+      const cno = record.customsNo || '—';
+      const desc = (record.description || '').substring(0, 50);
+      if (isCurrentlyClosed) {
+        if (!confirm(`确定重新打开「${company}」${cno}？`)) return;
+      } else {
+        if (!confirm(`「${company}」${cno}\n${desc}\n\n该问题是否已处理完成？\n确认后将转为「已闭环」状态。`)) return;
+      }
+      try {
+        const res = await fetch(API_SERVER + '/api/abnormal-records/' + encodeURIComponent(recordId), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus, _operator: operatorName })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || '服务器返回 ' + res.status);
+        }
+        const result = await res.json();
+        if (result.success) {
+          showToast(newStatus === '已闭环' ? '✅ 已标记为闭环' : '🔄 已标记为未闭环');
+          await fetchCloudData();
+          renderAll();
+        }
+      } catch(err) {
+        showToast('操作失败: ' + (err.message || '网络错误'));
+      }
+    });
+  });
+
+  // Update batch bar
+  updateBatchBar();
 }
 
 function toggleRowDetail(idx, btn) {
@@ -1804,11 +2815,10 @@ function switchYear(year) {
   currentYear = year;
   document.querySelectorAll('.year-btn').forEach(b => b.classList.toggle('active', b.dataset.year === year));
   selectedDim = null;
+  batchSelected.clear();
   document.getElementById('detailPanel').classList.remove('show');
-  // Reset filters & sort for the new year
   abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
   abnormalSort = { field: null, asc: true };
-  // Just re-render — no DOM rebuild needed
   renderAll();
 }
 

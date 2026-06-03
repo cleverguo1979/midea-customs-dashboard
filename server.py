@@ -2,16 +2,20 @@
 """
 美的业务关务看板 - 后端 API 服务器
 支持本地局域网访问和云部署（Render/Railway/Fly.io 等）
+
+v2: SQLite 持久化存储，支持实时登记、跟进、闭环管理
 """
 import os
 import sys
 import json
-import socket
+import uuid
+import sqlite3
 import tempfile
+import threading
 from datetime import datetime, timedelta
 
 try:
-    from flask import Flask, request, jsonify, send_from_directory
+    from flask import Flask, request, jsonify, send_from_directory, g
 except ImportError:
     print("请先安装 Flask: pip3 install flask")
     sys.exit(1)
@@ -24,13 +28,263 @@ app = Flask(__name__, static_folder=None)
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Max-Age'] = '86400'
     return response
 
+
+def get_operator():
+    """Extract operator name from JSON body (_operator field), fallback to 匿名.
+    Must be called after request.get_json()."""
+    try:
+        data = request.get_json(silent=True)
+        if data and '_operator' in data:
+            return str(data['_operator']).strip() or '匿名'
+    except Exception:
+        pass
+    return '匿名'
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(BASE_DIR, 'dashboard.db')
 DATA_FILE = os.path.join(BASE_DIR, 'data.json')
 PORT = int(os.environ.get('PORT', 8888))
+
+# ==================== DATABASE ====================
+
+def get_db():
+    """Get a thread-local database connection."""
+    if 'db' not in g:
+        g.db = sqlite3.connect(DB_FILE)
+        g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA journal_mode=WAL")
+        g.db.execute("PRAGMA foreign_keys=ON")
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(exception):
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
+
+def init_db():
+    """Create tables if they don't exist."""
+    db = sqlite3.connect(DB_FILE)
+    db.execute("PRAGMA journal_mode=WAL")
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS daily_records (
+            id TEXT PRIMARY KEY,
+            date TEXT NOT NULL,
+            year TEXT NOT NULL,
+            month INTEGER NOT NULL,
+            day INTEGER NOT NULL,
+            totalDeclared INTEGER DEFAULT 0,
+            totalReleased INTEGER DEFAULT 0,
+            reviewCompleted INTEGER DEFAULT 0,
+            unclearedReason TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            source TEXT DEFAULT 'excel'
+        );
+
+        CREATE TABLE IF NOT EXISTS abnormal_records (
+            id TEXT PRIMARY KEY,
+            seq INTEGER,
+            date TEXT NOT NULL,
+            category TEXT DEFAULT '',
+            bizUnit TEXT DEFAULT '',
+            company TEXT DEFAULT '',
+            importExport TEXT DEFAULT '',
+            customsNo TEXT DEFAULT '',
+            bolNo TEXT DEFAULT '',
+            containerNo TEXT DEFAULT '',
+            description TEXT DEFAULT '',
+            responsible TEXT DEFAULT '',
+            fee TEXT DEFAULT '',
+            progress TEXT DEFAULT '',
+            status TEXT DEFAULT '',
+            agent TEXT DEFAULT '',
+            follow_up_notes TEXT DEFAULT '[]',
+            year TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            source TEXT DEFAULT 'excel',
+            deleted INTEGER DEFAULT 0
+        );
+
+        CREATE TABLE IF NOT EXISTS operations (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            action TEXT NOT NULL,
+            record_type TEXT DEFAULT '',
+            record_id TEXT DEFAULT '',
+            record_summary TEXT DEFAULT '',
+            changes TEXT DEFAULT '{}',
+            operator TEXT DEFAULT '匿名'
+        );
+
+        CREATE TABLE IF NOT EXISTS mappings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            year TEXT NOT NULL,
+            company TEXT NOT NULL,
+            bizUnit TEXT DEFAULT '',
+            rep TEXT DEFAULT ''
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_daily_date ON daily_records(date);
+        CREATE INDEX IF NOT EXISTS idx_daily_year ON daily_records(year);
+        CREATE INDEX IF NOT EXISTS idx_abnormal_year ON abnormal_records(year);
+        CREATE INDEX IF NOT EXISTS idx_abnormal_deleted ON abnormal_records(deleted);
+        CREATE INDEX IF NOT EXISTS idx_operations_timestamp ON operations(timestamp);
+    """)
+    db.commit()
+    db.close()
+
+
+def migrate_from_json():
+    """One-time migration from data.json to SQLite."""
+    if not os.path.exists(DATA_FILE):
+        return
+
+    db = sqlite3.connect(DB_FILE)
+    db.execute("PRAGMA journal_mode=WAL")
+    db.row_factory = sqlite3.Row
+
+    # Check if data already exists
+    existing = db.execute("SELECT COUNT(*) as cnt FROM daily_records").fetchone()
+    if existing['cnt'] > 0:
+        db.close()
+        return
+
+    print("🔄 检测到 data.json，开始迁移到 SQLite...")
+    try:
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception as e:
+        print(f"⚠️  读取 data.json 失败: {e}")
+        db.close()
+        return
+
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    daily_count = 0
+    abnormal_count = 0
+    mapping_count = 0
+
+    for year in ['2025', '2026']:
+        year_data = data.get(year)
+        if not year_data:
+            continue
+
+        # Migrate daily records
+        for d in year_data.get('dailyData', []):
+            rid = str(uuid.uuid4())
+            db.execute("""
+                INSERT OR IGNORE INTO daily_records
+                (id, date, year, month, day, totalDeclared, totalReleased,
+                 reviewCompleted, unclearedReason, created_at, updated_at, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'excel')
+            """, (
+                rid,
+                d.get('date', ''),
+                str(d.get('year', year)),
+                d.get('month', 1),
+                d.get('day', 1),
+                d.get('totalDeclared', 0),
+                d.get('totalReleased', 0),
+                d.get('reviewCompleted', 0),
+                str(d.get('unclearedReason', '')).strip(),
+                now, now
+            ))
+            daily_count += 1
+
+        # Migrate abnormal records
+        for i, r in enumerate(year_data.get('abnormalRecords', [])):
+            rid = str(uuid.uuid4())
+            db.execute("""
+                INSERT OR IGNORE INTO abnormal_records
+                (id, seq, date, category, bizUnit, company, importExport,
+                 customsNo, bolNo, containerNo, description, responsible,
+                 fee, progress, status, agent, follow_up_notes, year,
+                 created_at, updated_at, source, deleted)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, 'excel', 0)
+            """, (
+                rid,
+                r.get('seq', i + 1),
+                str(r.get('date', '')).strip(),
+                str(r.get('category', '')).strip(),
+                str(r.get('bizUnit', '')).strip(),
+                str(r.get('company', '')).strip(),
+                str(r.get('importExport', '')).strip(),
+                str(r.get('customsNo', '')).strip(),
+                str(r.get('bolNo', '')).strip(),
+                str(r.get('containerNo', '')).strip(),
+                str(r.get('description', '')).strip(),
+                str(r.get('responsible', '')).strip(),
+                str(r.get('fee', '')).strip(),
+                str(r.get('progress', '')).strip(),
+                str(r.get('status', '')).strip(),
+                str(r.get('agent', '')).strip(),
+                year,
+                now, now
+            ))
+            abnormal_count += 1
+
+        # Migrate mappings
+        for m in year_data.get('mapping', []):
+            db.execute("""
+                INSERT OR IGNORE INTO mappings (year, company, bizUnit, rep)
+                VALUES (?, ?, ?, ?)
+            """, (
+                year,
+                str(m.get('company', '')).strip(),
+                str(m.get('bizUnit', '')).strip(),
+                str(m.get('rep', '')).strip()
+            ))
+            mapping_count += 1
+
+    # Log migration
+    migration_id = str(uuid.uuid4())
+    db.execute("""
+        INSERT INTO operations (id, timestamp, action, record_type, record_summary, changes, operator)
+        VALUES (?, ?, 'migrate', 'system', ?, ?, '系统')
+    """, (
+        migration_id,
+        now,
+        f'data.json → SQLite: {daily_count} 天日报, {abnormal_count} 条异常, {mapping_count} 条映射',
+        json.dumps({'daily_count': daily_count, 'abnormal_count': abnormal_count, 'mapping_count': mapping_count}, ensure_ascii=False)
+    ))
+
+    db.commit()
+    db.close()
+
+    # Rename data.json to backup
+    backup_path = DATA_FILE + '.bak'
+    try:
+        os.rename(DATA_FILE, backup_path)
+        print(f"✅ 迁移完成！{daily_count} 天日报, {abnormal_count} 条异常 → SQLite")
+        print(f"   data.json 已备份为 data.json.bak")
+    except OSError:
+        print(f"✅ 迁移完成！(备份失败，请手动重命名 data.json)")
+
+
+# ==================== HELPERS ====================
+
+def log_operation(action, record_type='', record_id='', record_summary='', changes=None, operator='匿名'):
+    """Record an operation to the audit log."""
+    db = get_db()
+    op_id = str(uuid.uuid4())
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    db.execute("""
+        INSERT INTO operations (id, timestamp, action, record_type, record_id, record_summary, changes, operator)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        op_id, now, action, record_type, record_id, record_summary,
+        json.dumps(changes or {}, ensure_ascii=False),
+        operator
+    ))
+    db.commit()
 
 
 def excel_serial_to_date(serial):
@@ -140,21 +394,91 @@ def parse_workbook(filepath):
     return all_years
 
 
-def load_data():
-    """Load stored data from JSON file."""
-    if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {'2025': None, '2026': None}
+def row_to_dict(row, table='daily'):
+    """Convert sqlite3.Row to dict."""
+    if not row:
+        return None
+    d = dict(row)
+    if table == 'abnormal':
+        try:
+            d['follow_up_notes'] = json.loads(d.get('follow_up_notes', '[]'))
+        except (json.JSONDecodeError, TypeError):
+            d['follow_up_notes'] = []
+    return d
 
 
-def save_data(data):
-    """Save data to JSON file."""
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def get_current_data():
+    """Return all data in the same format as the old data.json for frontend compatibility."""
+    db = get_db()
+    result = {}
+
+    for year in ['2025', '2026']:
+        daily_rows = db.execute(
+            "SELECT * FROM daily_records WHERE year = ? ORDER BY date", (year,)
+        ).fetchall()
+
+        abnormal_rows = db.execute(
+            "SELECT * FROM abnormal_records WHERE year = ? AND deleted = 0 ORDER BY seq", (year,)
+        ).fetchall()
+
+        mapping_rows = db.execute(
+            "SELECT company, bizUnit, rep FROM mappings WHERE year = ?", (year,)
+        ).fetchall()
+
+        if daily_rows or abnormal_rows:
+            result[year] = {
+                'dailyData': [
+                    {
+                        'id': r['id'],
+                        'date': r['date'],
+                        'year': r['year'],
+                        'month': r['month'],
+                        'day': r['day'],
+                        'totalDeclared': r['totalDeclared'],
+                        'totalReleased': r['totalReleased'],
+                        'reviewCompleted': r['reviewCompleted'],
+                        'unclearedReason': r['unclearedReason'],
+                        'source': r['source']
+                    }
+                    for r in daily_rows
+                ],
+                'abnormalRecords': [
+                    {
+                        'id': r['id'],
+                        'seq': r['seq'],
+                        'date': r['date'],
+                        'category': r['category'],
+                        'bizUnit': r['bizUnit'],
+                        'company': r['company'],
+                        'importExport': r['importExport'],
+                        'customsNo': r['customsNo'],
+                        'bolNo': r['bolNo'],
+                        'containerNo': r['containerNo'],
+                        'description': r['description'],
+                        'responsible': r['responsible'],
+                        'fee': r['fee'],
+                        'progress': r['progress'],
+                        'status': r['status'],
+                        'agent': r['agent'],
+                        'follow_up_notes': json.loads(r['follow_up_notes']) if r['follow_up_notes'] else [],
+                        'source': r['source'],
+                        'created_at': r['created_at'],
+                        'updated_at': r['updated_at']
+                    }
+                    for r in abnormal_rows
+                ],
+                'mapping': [
+                    {'company': m['company'], 'bizUnit': m['bizUnit'], 'rep': m['rep']}
+                    for m in mapping_rows
+                ]
+            }
+        else:
+            result[year] = None
+
+    return result
 
 
-# === Routes ===
+# ==================== ROUTES ====================
 
 @app.route('/')
 def index():
@@ -170,14 +494,22 @@ def static_files(filename):
 
 @app.route('/api/data', methods=['GET'])
 def get_data():
-    """Return the current stored data."""
-    data = load_data()
+    """Return the current stored data (same format as before for compatibility)."""
+    data = get_current_data()
     return jsonify(data)
 
 
+# ---------------- Upload (merge mode) ----------------
+
 @app.route('/api/upload', methods=['POST'])
 def upload():
-    """Accept Excel file upload, parse, and store."""
+    """Accept Excel file upload, parse, and merge into database.
+
+    Default behavior (merge): New records are added; existing records (by date for daily,
+    by customsNo+bizUnit for abnormal) are NOT overwritten if they have manual edits.
+
+    Query param ?mode=replace enables full replacement of the year's data.
+    """
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
 
@@ -188,8 +520,10 @@ def upload():
     if not file.filename.lower().endswith(('.xlsx', '.xls')):
         return jsonify({'error': 'Invalid file format, expected .xlsx or .xls'}), 400
 
+    mode = request.args.get('mode', 'merge')
+    operator = get_operator()
+
     try:
-        # Save to temp file and parse
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx')
         file.save(tmp.name)
         tmp.close()
@@ -197,34 +531,664 @@ def upload():
         parsed = parse_workbook(tmp.name)
         os.unlink(tmp.name)
 
-        # Full replace: merge with existing but new data overwrites
-        current = load_data()
+        db = get_db()
+        now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+        total_daily = 0
+        total_abnormal = 0
+
         for year in ['2025', '2026']:
-            if year in parsed:
-                current[year] = parsed[year]
-            elif year not in current:
-                current[year] = None
+            year_data = parsed.get(year)
+            if not year_data:
+                continue
 
-        save_data(current)
+            if mode == 'replace':
+                # Full replace: delete existing data for this year
+                db.execute("DELETE FROM daily_records WHERE year = ? AND source = 'excel'", (year,))
+                db.execute("DELETE FROM abnormal_records WHERE year = ? AND source = 'excel'", (year,))
+                db.execute("DELETE FROM mappings WHERE year = ?", (year,))
 
-        total_days = sum(len(v['dailyData']) for v in current.values() if v and v.get('dailyData'))
-        total_ab = sum(len(v['abnormalRecords']) for v in current.values() if v and v.get('abnormalRecords'))
-        years_found = [y for y in ['2025', '2026'] if current.get(y) and current[y].get('dailyData')]
+            # Merge daily records — skip dates that already exist
+            for d in year_data.get('dailyData', []):
+                existing = db.execute(
+                    "SELECT id FROM daily_records WHERE date = ? AND year = ?",
+                    (d['date'], year)
+                ).fetchone()
+                if existing:
+                    continue  # Skip existing dates
+                rid = str(uuid.uuid4())
+                db.execute("""
+                    INSERT INTO daily_records
+                    (id, date, year, month, day, totalDeclared, totalReleased,
+                     reviewCompleted, unclearedReason, created_at, updated_at, source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'excel')
+                """, (
+                    rid, d['date'], year, d['month'], d['day'],
+                    d['totalDeclared'], d['totalReleased'],
+                    d['reviewCompleted'], d['unclearedReason'],
+                    now, now
+                ))
+                total_daily += 1
+
+            # Merge abnormal records — skip by customsNo + date combination
+            for r in year_data.get('abnormalRecords', []):
+                customs_no = str(r.get('customsNo', '')).strip()
+                rec_date = str(r.get('date', '')).strip()
+                if customs_no and rec_date:
+                    existing = db.execute(
+                        "SELECT id FROM abnormal_records WHERE customsNo = ? AND date = ? AND deleted = 0",
+                        (customs_no, rec_date)
+                    ).fetchone()
+                    if existing:
+                        continue
+                rid = str(uuid.uuid4())
+                db.execute("""
+                    INSERT INTO abnormal_records
+                    (id, seq, date, category, bizUnit, company, importExport,
+                     customsNo, bolNo, containerNo, description, responsible,
+                     fee, progress, status, agent, follow_up_notes, year,
+                     created_at, updated_at, source, deleted)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, 'excel', 0)
+                """, (
+                    rid,
+                    r.get('seq', 0),
+                    rec_date,
+                    str(r.get('category', '')).strip(),
+                    str(r.get('bizUnit', '')).strip(),
+                    str(r.get('company', '')).strip(),
+                    str(r.get('importExport', '')).strip(),
+                    customs_no,
+                    str(r.get('bolNo', '')).strip(),
+                    str(r.get('containerNo', '')).strip(),
+                    str(r.get('description', '')).strip(),
+                    str(r.get('responsible', '')).strip(),
+                    str(r.get('fee', '')).strip(),
+                    str(r.get('progress', '')).strip(),
+                    str(r.get('status', '')).strip(),
+                    str(r.get('agent', '')).strip(),
+                    year, now, now
+                ))
+                total_abnormal += 1
+
+            # Merge mappings
+            for m in year_data.get('mapping', []):
+                company = str(m.get('company', '')).strip()
+                if company:
+                    existing = db.execute(
+                        "SELECT id FROM mappings WHERE company = ? AND year = ?",
+                        (company, year)
+                    ).fetchone()
+                    if not existing:
+                        db.execute(
+                            "INSERT INTO mappings (year, company, bizUnit, rep) VALUES (?, ?, ?, ?)",
+                            (year, company, str(m.get('bizUnit', '')).strip(), str(m.get('rep', '')).strip())
+                        )
+
+        db.commit()
+
+        log_operation(
+            action='upload',
+            record_type='system',
+            record_summary=f'{mode}模式: {file.filename} → {total_daily}天日报, {total_abnormal}条异常',
+            changes={'mode': mode, 'filename': file.filename, 'daily_added': total_daily, 'abnormal_added': total_abnormal},
+            operator=operator
+        )
 
         return jsonify({
             'success': True,
-            'years': years_found,
-            'totalDays': total_days,
-            'totalAbnormal': total_ab,
-            'message': f'数据上传成功！{",".join(years_found)} 年，{total_days} 天记录，{total_ab} 条异常'
+            'years': [y for y in ['2025', '2026'] if parsed.get(y) and parsed[y].get('dailyData')],
+            'totalDays': total_daily,
+            'totalAbnormal': total_abnormal,
+            'message': f'数据上传成功！新增 {total_daily} 天记录，{total_abnormal} 条异常'
         })
 
     except Exception as e:
         return jsonify({'error': f'文件解析失败: {str(e)}'}), 500
 
 
+# ---------------- Abnormal Records CRUD ----------------
+
+@app.route('/api/abnormal-records', methods=['POST'])
+def create_abnormal_record():
+    """Create a new abnormal record manually."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'Invalid JSON'}), 400
+
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    rid = str(uuid.uuid4())
+    rec_date = str(data.get('date', datetime.now().strftime('%Y-%m-%d'))).strip()
+    year = rec_date[:4] if len(rec_date) >= 4 else str(datetime.now().year)
+
+    # Auto-assign seq number
+    max_seq = db.execute(
+        "SELECT COALESCE(MAX(seq), 0) as mx FROM abnormal_records WHERE year = ?", (year,)
+    ).fetchone()['mx']
+    seq = max_seq + 1
+
+    db.execute("""
+        INSERT INTO abnormal_records
+        (id, seq, date, category, bizUnit, company, importExport,
+         customsNo, bolNo, containerNo, description, responsible,
+         fee, progress, status, agent, follow_up_notes, year,
+         created_at, updated_at, source, deleted)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, 'manual', 0)
+    """, (
+        rid, seq, rec_date,
+        str(data.get('category', '')).strip(),
+        str(data.get('bizUnit', '')).strip(),
+        str(data.get('company', '')).strip(),
+        str(data.get('importExport', '')).strip(),
+        str(data.get('customsNo', '')).strip(),
+        str(data.get('bolNo', '')).strip(),
+        str(data.get('containerNo', '')).strip(),
+        str(data.get('description', '')).strip(),
+        str(data.get('responsible', '')).strip(),
+        str(data.get('fee', '')).strip(),
+        str(data.get('progress', '')).strip(),
+        str(data.get('status', '未闭环')).strip(),
+        str(data.get('agent', '')).strip(),
+        year, now, now
+    ))
+    db.commit()
+
+    log_operation(
+        action='create', record_type='abnormal', record_id=rid,
+        record_summary=f'新增异常: {data.get("company", "")} {data.get("customsNo", "")}',
+        changes={'new': {k: v for k, v in data.items() if v}},
+        operator=get_operator()
+    )
+
+    return jsonify({'success': True, 'id': rid, 'seq': seq}), 201
+
+
+@app.route('/api/abnormal-records/<record_id>', methods=['PUT'])
+def update_abnormal_record(record_id):
+    """Update an abnormal record. Only provided fields are updated."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({'error': 'Invalid JSON'}), 400
+
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+
+    old = db.execute("SELECT * FROM abnormal_records WHERE id = ? AND deleted = 0", (record_id,)).fetchone()
+    if not old:
+        return jsonify({'error': 'Record not found'}), 404
+
+    # Build update — only set fields that are provided and different
+    allowed_fields = [
+        'date', 'category', 'bizUnit', 'company', 'importExport',
+        'customsNo', 'bolNo', 'containerNo', 'description', 'responsible',
+        'fee', 'progress', 'status', 'agent', 'seq'
+    ]
+    updates = {}
+    changes = {}
+    for field in allowed_fields:
+        if field in data:
+            new_val = str(data[field]).strip() if data[field] is not None else ''
+            old_val = str(old[field] or '').strip()
+            if new_val != old_val:
+                updates[field] = new_val
+                changes[field] = {'old': old_val, 'new': new_val}
+
+    if not updates:
+        return jsonify({'success': True, 'message': 'No changes'})
+
+    set_clauses = ', '.join(f'{k} = ?' for k in updates.keys())
+    values = list(updates.values()) + [now, record_id]
+
+    db.execute(
+        f"UPDATE abnormal_records SET {set_clauses}, updated_at = ? WHERE id = ?",
+        values
+    )
+    db.commit()
+
+    if changes:
+        log_operation(
+            action='update', record_type='abnormal', record_id=record_id,
+            record_summary=f'更新记录: {old["company"]} {old["customsNo"]}',
+            changes=changes,
+            operator=get_operator()
+        )
+
+    return jsonify({'success': True, 'changes': changes})
+
+
+@app.route('/api/abnormal-records/<record_id>', methods=['DELETE'])
+def delete_abnormal_record(record_id):
+    """Soft-delete an abnormal record."""
+    db = get_db()
+    old = db.execute("SELECT * FROM abnormal_records WHERE id = ? AND deleted = 0", (record_id,)).fetchone()
+    if not old:
+        return jsonify({'error': 'Record not found'}), 404
+
+    db.execute("UPDATE abnormal_records SET deleted = 1, updated_at = ? WHERE id = ?",
+               (datetime.now().strftime('%Y-%m-%dT%H:%M:%S'), record_id))
+    db.commit()
+
+    log_operation(
+        action='delete', record_type='abnormal', record_id=record_id,
+        record_summary=f'删除记录: {old["company"]} {old["customsNo"]}',
+        operator=get_operator()
+    )
+
+    return jsonify({'success': True})
+
+
+@app.route('/api/abnormal-records/batch-update', methods=['POST'])
+def batch_update_abnormal():
+    """Batch update status of multiple abnormal records."""
+    data = request.get_json(silent=True)
+    if not data or 'ids' not in data or 'status' not in data:
+        return jsonify({'error': 'Requires ids (array) and status (string)'}), 400
+
+    ids = data['ids']
+    new_status = str(data['status']).strip()
+    if not ids or not new_status:
+        return jsonify({'error': 'ids and status required'}), 400
+
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    count = 0
+    summaries = []
+
+    for rid in ids:
+        old = db.execute("SELECT * FROM abnormal_records WHERE id = ? AND deleted = 0", (rid,)).fetchone()
+        if not old:
+            continue
+        old_status = (old['status'] or '').strip()
+        if old_status == new_status:
+            continue
+        db.execute("UPDATE abnormal_records SET status = ?, updated_at = ? WHERE id = ?",
+                   (new_status, now, rid))
+        summaries.append(f'{old["company"]} {old["customsNo"]}')
+        count += 1
+
+    db.commit()
+
+    if count > 0:
+        log_operation(
+            action='batch_update', record_type='abnormal',
+            record_summary=f'批量更新 {count} 条 → {new_status}',
+            changes={'ids': ids, 'new_status': new_status, 'count': count, 'summaries': summaries},
+            operator=get_operator()
+        )
+
+    return jsonify({'success': True, 'updated': count})
+
+
+# ---------------- Follow-up Notes ----------------
+
+@app.route('/api/abnormal-records/<record_id>/notes', methods=['POST'])
+def add_follow_up_note(record_id):
+    """Add a follow-up note to an abnormal record."""
+    data = request.get_json(silent=True)
+    if not data or 'note' not in data:
+        return jsonify({'error': 'note is required'}), 400
+
+    db = get_db()
+    old = db.execute("SELECT * FROM abnormal_records WHERE id = ? AND deleted = 0", (record_id,)).fetchone()
+    if not old:
+        return jsonify({'error': 'Record not found'}), 404
+
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    note_entry = {
+        'date': now,
+        'note': str(data['note']).strip(),
+        'author': get_operator()
+    }
+
+    try:
+        existing_notes = json.loads(old['follow_up_notes'] or '[]')
+    except json.JSONDecodeError:
+        existing_notes = []
+
+    existing_notes.append(note_entry)
+    db.execute(
+        "UPDATE abnormal_records SET follow_up_notes = ?, updated_at = ? WHERE id = ?",
+        (json.dumps(existing_notes, ensure_ascii=False), now, record_id)
+    )
+    db.commit()
+
+    log_operation(
+        action='add_note', record_type='abnormal', record_id=record_id,
+        record_summary=f'添加备注: {old["company"]} {old["customsNo"]}',
+        changes={'note': note_entry},
+        operator=get_operator()
+    )
+
+    return jsonify({'success': True, 'notes': existing_notes})
+
+
+# ---------------- Daily Records ----------------
+
+@app.route('/api/daily-records', methods=['POST'])
+def create_daily_record():
+    """Manually create/update a daily business record."""
+    data = request.get_json(silent=True)
+    if not data or 'date' not in data:
+        return jsonify({'error': 'date is required'}), 400
+
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    rec_date = str(data['date']).strip()
+    year = rec_date[:4]
+
+    # Check if date already exists
+    existing = db.execute(
+        "SELECT id FROM daily_records WHERE date = ? AND year = ?",
+        (rec_date, year)
+    ).fetchone()
+
+    if existing:
+        # Update existing
+        db.execute("""
+            UPDATE daily_records SET
+                totalDeclared = ?, totalReleased = ?, reviewCompleted = ?,
+                unclearedReason = ?, updated_at = ?, source = 'manual'
+            WHERE id = ?
+        """, (
+            data.get('totalDeclared', 0),
+            data.get('totalReleased', 0),
+            data.get('reviewCompleted', 0),
+            str(data.get('unclearedReason', '')).strip(),
+            now,
+            existing['id']
+        ))
+        db.commit()
+        log_operation(
+            action='update_daily', record_type='daily', record_id=existing['id'],
+            record_summary=f'更新日报: {rec_date}',
+            changes=data,
+            operator=get_operator()
+        )
+        return jsonify({'success': True, 'id': existing['id'], 'action': 'updated'})
+
+    # Create new
+    rid = str(uuid.uuid4())
+    dt = datetime.strptime(rec_date, '%Y-%m-%d') if len(rec_date) == 10 else datetime.now()
+    db.execute("""
+        INSERT INTO daily_records
+        (id, date, year, month, day, totalDeclared, totalReleased,
+         reviewCompleted, unclearedReason, created_at, updated_at, source)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual')
+    """, (
+        rid, rec_date, year, dt.month, dt.day,
+        data.get('totalDeclared', 0),
+        data.get('totalReleased', 0),
+        data.get('reviewCompleted', 0),
+        str(data.get('unclearedReason', '')).strip(),
+        now, now
+    ))
+    db.commit()
+
+    log_operation(
+        action='create_daily', record_type='daily', record_id=rid,
+        record_summary=f'新增日报: {rec_date}',
+        changes=data,
+        operator=get_operator()
+    )
+
+    return jsonify({'success': True, 'id': rid, 'action': 'created'}), 201
+
+
+# ---------------- Clear ----------------
+
+@app.route('/api/clear', methods=['POST'])
+def clear_data():
+    """Clear all data after confirmation. Requires exact confirmation string."""
+    data = request.get_json(silent=True)
+    if not data or data.get('confirmation') != '确认清零所有数据':
+        return jsonify({'error': 'Confirmation string does not match. Required: 确认清零所有数据'}), 403
+
+    db = get_db()
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+
+    # Count before clearing
+    daily_count = db.execute("SELECT COUNT(*) as cnt FROM daily_records").fetchone()['cnt']
+    abnormal_count = db.execute("SELECT COUNT(*) as cnt FROM abnormal_records WHERE deleted = 0").fetchone()['cnt']
+
+    # Log the clear operation BEFORE deleting
+    log_operation(
+        action='clear',
+        record_type='system',
+        record_summary=f'清零所有数据: {daily_count} 天日报, {abnormal_count} 条异常',
+        changes={'daily_count': daily_count, 'abnormal_count': abnormal_count},
+        operator=request.headers.get('X-Operator', '管理员')
+    )
+
+    # Delete all data
+    db.execute("DELETE FROM daily_records")
+    db.execute("DELETE FROM abnormal_records")
+    db.execute("DELETE FROM mappings")
+    db.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'已清零 {daily_count} 天日报, {abnormal_count} 条异常',
+        'daily_cleared': daily_count,
+        'abnormal_cleared': abnormal_count
+    })
+
+
+# ---------------- Operations Log ----------------
+
+@app.route('/api/operations', methods=['GET'])
+def get_operations():
+    """Get operations log. Optional ?record_id= to filter by record."""
+    limit = request.args.get('limit', 100, type=int)
+    record_id = request.args.get('record_id', '').strip()
+    db = get_db()
+    if record_id:
+        rows = db.execute(
+            "SELECT * FROM operations WHERE record_id = ? ORDER BY timestamp DESC LIMIT ?",
+            (record_id, limit)
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT * FROM operations ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+# ---------------- Dimension Item Editing ----------------
+
+@app.route('/api/daily-records/<record_id>/release-item', methods=['POST'])
+def release_dimension_item(record_id):
+    """Mark a dimension item as released — remove from unclearedReason, increment released count."""
+    data = request.get_json(silent=True)
+    if not data or 'item' not in data or 'dimension' not in data:
+        return jsonify({'error': 'item and dimension required'}), 400
+
+    db = get_db()
+    record = db.execute("SELECT * FROM daily_records WHERE id = ?", (record_id,)).fetchone()
+    if not record:
+        return jsonify({'error': 'Daily record not found'}), 404
+
+    old_reason = record['unclearedReason'] or ''
+    item_text = str(data['item']).strip()
+    dim_name = str(data['dimension']).strip()
+
+    # Remove the specific item from the unclearedReason text
+    new_reason = remove_item_from_reason(old_reason, dim_name, item_text)
+
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    new_released = (record['totalReleased'] or 0) + 1
+
+    db.execute("""
+        UPDATE daily_records SET
+            unclearedReason = ?, totalReleased = ?,
+            updated_at = ?, source = 'manual'
+        WHERE id = ?
+    """, (new_reason, new_released, now, record_id))
+    db.commit()
+
+    log_operation(
+        action='release_item', record_type='daily', record_id=record_id,
+        record_summary=f'放行: {dim_name} - {item_text}',
+        changes={'dimension': dim_name, 'item': item_text},
+        operator=get_operator()
+    )
+
+    return jsonify({'success': True, 'new_uncleared': new_reason, 'totalReleased': new_released})
+
+
+@app.route('/api/daily-records/<record_id>/transfer-item', methods=['POST'])
+def transfer_dimension_item(record_id):
+    """Transfer a dimension item to abnormal records table."""
+    data = request.get_json(silent=True)
+    if not data or 'item' not in data or 'dimension' not in data:
+        return jsonify({'error': 'item and dimension required'}), 400
+
+    db = get_db()
+    record = db.execute("SELECT * FROM daily_records WHERE id = ?", (record_id,)).fetchone()
+    if not record:
+        return jsonify({'error': 'Daily record not found'}), 404
+
+    old_reason = record['unclearedReason'] or ''
+    item_text = str(data['item']).strip()
+    dim_name = str(data['dimension']).strip()
+
+    # Remove from unclearedReason
+    new_reason = remove_item_from_reason(old_reason, dim_name, item_text)
+
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    db.execute("""
+        UPDATE daily_records SET unclearedReason = ?, updated_at = ? WHERE id = ?
+    """, (new_reason, now, record_id))
+
+    # Create abnormal record
+    rid = str(uuid.uuid4())
+    year = str(record['year'])
+    max_seq = db.execute(
+        "SELECT COALESCE(MAX(seq), 0) as mx FROM abnormal_records WHERE year = ?", (year,)
+    ).fetchone()['mx']
+    seq = max_seq + 1
+
+    # Determine category from dimension
+    cat_map = {'查验': '查验', '空运': '其他', '驳船': '其他', '大船': '其他', '公路': '其他'}
+    category = cat_map.get(dim_name, '其他')
+
+    # Parse item text: try to extract ID and reason
+    parts = item_text.split(None, 1)
+    item_id = parts[0] if parts else item_text
+    item_reason = parts[1] if len(parts) > 1 else item_text
+
+    db.execute("""
+        INSERT INTO abnormal_records
+        (id, seq, date, category, bizUnit, company, importExport,
+         customsNo, bolNo, containerNo, description, responsible,
+         fee, progress, status, agent, follow_up_notes, year,
+         created_at, updated_at, source, deleted)
+        VALUES (?, ?, ?, ?, '', '', '', ?, '', '', ?, '', '', '', '未闭环', '', '[]', ?, ?, ?, 'transfer', 0)
+    """, (
+        rid, seq, record['date'], category,
+        item_id, item_reason,
+        year, now, now
+    ))
+    db.commit()
+
+    log_operation(
+        action='transfer_item', record_type='daily', record_id=record_id,
+        record_summary=f'转异常: {dim_name} - {item_text} → 异常记录 #{seq}',
+        changes={'dimension': dim_name, 'item': item_text, 'new_abnormal_id': rid},
+        operator=get_operator()
+    )
+
+    log_operation(
+        action='create', record_type='abnormal', record_id=rid,
+        record_summary=f'由未放行转入: {dim_name} {item_text}',
+        changes={'source': 'dimension_transfer', 'dimension': dim_name},
+        operator=get_operator()
+    )
+
+    return jsonify({
+        'success': True,
+        'new_uncleared': new_reason,
+        'abnormal_id': rid,
+        'abnormal_seq': seq
+    })
+
+
+def remove_item_from_reason(reason_str, dimension, item_text):
+    """Remove a specific item from an unclearedReason string for a given dimension.
+    Also cleans up empty dimension headers."""
+    if not reason_str or reason_str == '无':
+        return '无'
+
+    lines = reason_str.split('\n')
+    result = []
+    dim_header_indices = []  # Track (index, dim_name) for result lines
+    pending_clear = set()    # Dimensions whose items have been fully cleared
+
+    for line in lines:
+        stripped = line.strip()
+        is_header = False
+        for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
+            if stripped.startswith(dim_name + '：') or stripped.startswith(dim_name + ':'):
+                is_header = True
+                dim_header_indices.append((len(result), dim_name))
+                break
+
+        if is_header:
+            result.append(line)
+            continue
+
+        # Check if this line contains the item to remove
+        if item_text and (item_text in stripped or (item_text.split() and stripped.startswith(item_text.split()[0]))):
+            continue  # Skip this item
+
+        result.append(line)
+
+    # Clean up empty dimension sections (header followed by no items or only whitespace until next header)
+    cleaned = []
+    i = 0
+    while i < len(result):
+        line = result[i]
+        stripped = line.strip()
+        # Check if this is a dimension header
+        is_header = False
+        for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
+            if stripped.startswith(dim_name + '：') or stripped.startswith(dim_name + ':'):
+                is_header = True
+                break
+        if is_header:
+            # Look ahead: if next line is empty or another header, skip this header
+            next_idx = i + 1
+            has_content = False
+            while next_idx < len(result):
+                next_stripped = result[next_idx].strip()
+                # Check if next line is another header
+                next_is_header = False
+                for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
+                    if next_stripped.startswith(dim_name + '：') or next_stripped.startswith(dim_name + ':'):
+                        next_is_header = True
+                        break
+                if next_is_header:
+                    break
+                if next_stripped:
+                    has_content = True
+                    break
+                next_idx += 1
+            if not has_content:
+                i += 1
+                continue  # Skip empty dimension header
+        cleaned.append(line)
+        i += 1
+
+    final = '\n'.join(cleaned).strip()
+    return final if final else '无'
+
+
+# ---------------- Startup ----------------
+
+# Initialize database and run migration on import
+init_db()
+migrate_from_json()
+
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get('PORT', 8888))
-    print(f"Starting server on port {port}")
+    print(f"🚀 美的关务看板 v2 启动在端口 {port}")
+    print(f"   数据库: {DB_FILE}")
     app.run(host='0.0.0.0', port=port, debug=False)

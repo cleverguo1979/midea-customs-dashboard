@@ -6,3 +6,6 @@ __pycache__/
 *.xlsx
 *.xls
 tunnel_url.txt
+dashboard.db
+dashboard.db-*
+data.json.bak
