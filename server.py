@@ -1081,7 +1081,7 @@ def transfer_dimension_item(record_id):
          customsNo, bolNo, containerNo, description, responsible,
          fee, progress, status, agent, follow_up_notes, year,
          created_at, updated_at, source, deleted)
-        VALUES (?, ?, ?, ?, '', '', '', ?, '', '', ?, '', '', '', '未闭环', '', '[]', ?, ?, ?, 'transfer', 0)
+        VALUES (?, ?, ?, ?, '', '', '', '', ?, '', ?, '', '', '', '未闭环', '', '[]', ?, ?, ?, 'transfer', 0)
     """, (
         rid, seq, record['date'], category,
         item_id, item_reason,
@@ -1109,6 +1109,88 @@ def transfer_dimension_item(record_id):
         'abnormal_id': rid,
         'abnormal_seq': seq
     })
+
+
+@app.route('/api/daily-records/ensure', methods=['POST'])
+def ensure_daily_record():
+    """Ensure a daily record exists for the given date. Create one if not.
+    Returns the record ID so callers can then add items to it."""
+    data = request.get_json(silent=True)
+    if not data or 'date' not in data:
+        return jsonify({'error': 'date is required'}), 400
+
+    db = get_db()
+    rec_date = str(data['date']).strip()
+    year = rec_date[:4]
+
+    existing = db.execute(
+        "SELECT id FROM daily_records WHERE date = ? AND year = ?",
+        (rec_date, year)
+    ).fetchone()
+
+    if existing:
+        return jsonify({'success': True, 'id': existing['id'], 'action': 'found'})
+
+    # Create a stub daily record
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    rid = str(uuid.uuid4())
+    dt = datetime.strptime(rec_date, '%Y-%m-%d')
+    db.execute("""
+        INSERT INTO daily_records
+        (id, date, year, month, day, totalDeclared, totalReleased,
+         reviewCompleted, unclearedReason, created_at, updated_at, source)
+        VALUES (?, ?, ?, ?, ?, 0, 0, 0, '', ?, ?, 'manual')
+    """, (rid, rec_date, year, dt.month, dt.day, now, now))
+    db.commit()
+
+    log_operation(
+        action='ensure_daily', record_type='daily', record_id=rid,
+        record_summary=f'自动创建日报: {rec_date}',
+        changes={'date': rec_date},
+        operator=get_operator()
+    )
+
+    return jsonify({'success': True, 'id': rid, 'action': 'created'})
+
+
+@app.route('/api/daily-records/<record_id>/add-item', methods=['POST'])
+def add_dimension_item(record_id):
+    """Add a new item to a dimension section in the unclearedReason."""
+    data = request.get_json(silent=True)
+    if not data or 'dimension' not in data or 'item_id' not in data:
+        return jsonify({'error': 'dimension and item_id required'}), 400
+
+    db = get_db()
+    record = db.execute("SELECT * FROM daily_records WHERE id = ?", (record_id,)).fetchone()
+    if not record:
+        return jsonify({'error': 'Daily record not found'}), 404
+
+    old_reason = record['unclearedReason'] or ''
+    dim_name = str(data['dimension']).strip()
+    item_id = str(data['item_id']).strip()
+    item_reason = str(data.get('reason', '')).strip()
+
+    new_reason = add_item_to_reason(old_reason, dim_name, item_id, item_reason)
+
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    new_review_completed = (record['reviewCompleted'] or 0) + 1
+
+    db.execute("""
+        UPDATE daily_records SET
+            unclearedReason = ?, reviewCompleted = ?,
+            updated_at = ?, source = 'manual'
+        WHERE id = ?
+    """, (new_reason, new_review_completed, now, record_id))
+    db.commit()
+
+    log_operation(
+        action='add_item', record_type='daily', record_id=record_id,
+        record_summary=f'新增未放行: {dim_name} - {item_id} {item_reason}',
+        changes={'dimension': dim_name, 'item_id': item_id, 'reason': item_reason},
+        operator=get_operator()
+    )
+
+    return jsonify({'success': True, 'new_uncleared': new_reason, 'reviewCompleted': new_review_completed})
 
 
 def remove_item_from_reason(reason_str, dimension, item_text):
@@ -1179,6 +1261,65 @@ def remove_item_from_reason(reason_str, dimension, item_text):
 
     final = '\n'.join(cleaned).strip()
     return final if final else '无'
+
+
+def add_item_to_reason(reason_str, dimension, item_id, reason):
+    """Add an item to a specific dimension section in unclearedReason text.
+    Creates the dimension section if it doesn't exist, updates the summary count."""
+    import re
+    dim_keys = ['空运', '驳船', '大船', '公路', '查验']
+    new_item_line = f"{item_id} {reason}" if reason else item_id
+
+    # Empty / no content — build from scratch
+    if not reason_str or reason_str == '无':
+        return f"1票审结未放行 \n{dimension}：\n{new_item_line}"
+
+    lines = reason_str.split('\n')
+
+    # Find target dimension header
+    dim_idx = -1
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith(dimension + '：') or stripped.startswith(dimension + ':'):
+            dim_idx = i
+            break
+
+    if dim_idx >= 0:
+        # Find the next dimension header after dim_idx as the section boundary
+        insert_idx = len(lines)
+        for i in range(dim_idx + 1, len(lines)):
+            stripped = lines[i].strip()
+            for dk in dim_keys:
+                if stripped.startswith(dk + '：') or stripped.startswith(dk + ':'):
+                    insert_idx = i
+                    break
+            if insert_idx < len(lines):
+                break
+
+        # Insert after the last non-empty line inside this section
+        actual_insert = insert_idx
+        for j in range(insert_idx - 1, dim_idx, -1):
+            if lines[j].strip():
+                actual_insert = j + 1
+                break
+        else:
+            actual_insert = dim_idx + 1  # Empty section, insert right after header
+
+        lines.insert(actual_insert, new_item_line)
+    else:
+        # Dimension section doesn't exist — append at end
+        lines.append(f"{dimension}：")
+        lines.append(new_item_line)
+
+    # Increment the summary count line (e.g. "23票审结未放行" → "24票")
+    for i, line in enumerate(lines):
+        m = re.match(r'^(\d+)票审结未放行', line.strip())
+        if m:
+            count = int(m.group(1)) + 1
+            lines[i] = line.replace(m.group(0), f"{count}票审结未放行", 1)
+            break
+
+    return '\n'.join(lines).strip()
 
 
 # ---------------- Startup ----------------

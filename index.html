@@ -569,8 +569,24 @@
         <div class="form-group"><label>闭环状态</label><select id="editStatus"><option value="未闭环">🔴 未闭环</option><option value="已闭环">🟢 已闭环</option></select></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label>事业部</label><input type="text" id="editBizUnit" placeholder="例如：冰箱事业部"></div>
+        <div class="form-group"><label>经营单位</label><input type="text" id="editCompany" placeholder="例如：合肥美的"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>进出口</label><select id="editImportExport"><option value="">请选择</option><option>进口</option><option>出口</option></select></div>
+        <div class="form-group"><label>代理</label><input type="text" id="editAgent" placeholder="例如：XX报关行"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>报关单号</label><input type="text" id="editCustomsNo" placeholder="报关单号"></div>
+        <div class="form-group"><label>提单号</label><input type="text" id="editBolNo" placeholder="提单号"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>柜号</label><input type="text" id="editContainerNo" placeholder="柜号"></div>
         <div class="form-group"><label>责任方</label><select id="editResponsible"><option value="">请选择</option><option>海关系统</option><option>代理</option><option>美的</option><option>船公司</option><option>码头</option><option>车队</option><option>其他</option></select></div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label>费用</label><input type="text" id="editFee" placeholder="异常费用"></div>
+        <div class="form-group"></div>
       </div>
       <div class="form-row single"><div class="form-group"><label>处理进度</label><textarea id="editProgress" placeholder="处理进度..." rows="5" style="min-height:120px;font-size:14px;line-height:1.8"></textarea></div></div>
       <div class="form-row single"><div class="form-group"><label>异常描述</label><textarea id="editDescription" placeholder="描述异常情况..." rows="3"></textarea></div></div>
@@ -675,6 +691,40 @@
   </div>
 </div>
 
+<!-- Add Uncleared Item Modal -->
+<div class="form-modal-overlay" id="addUnclearedModal">
+  <div class="form-modal-box" style="width:480px">
+    <h3>＋ 新增未放行条目</h3>
+    <div class="form-desc">手动登记一条未放行异常，将追加到指定日期的对应维度下</div>
+    <div class="form-body">
+      <div class="form-row single">
+        <div class="form-group"><label>日期 *</label><input type="date" id="newUnclearedDate"></div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group"><label>维度 *</label>
+          <select id="newUnclearedDim" style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text)">
+            <option value="空运">✈️ 空运</option>
+            <option value="驳船">🚢 驳船</option>
+            <option value="大船">🛳️ 大船</option>
+            <option value="公路">🚛 公路</option>
+            <option value="查验">🔍 查验</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group"><label>单号 *</label><input type="text" id="newUnclearedId" placeholder="例如：T262706516"></div>
+      </div>
+      <div class="form-row single">
+        <div class="form-group"><label>未放行原因</label><input type="text" id="newUnclearedReason" placeholder="例如：未过境 / 未进港"></div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-form ghost" id="btnAddUnclearedCancel">取消</button>
+      <button class="btn-form primary" id="btnAddUnclearedSubmit">确认新增</button>
+    </div>
+  </div>
+</div>
+
 <div class="main" id="mainContent">
   <!-- Data Status -->
   <div class="data-status" id="dataStatus">
@@ -698,6 +748,7 @@
   <div class="section-header">
     <span class="section-title">⚠️ 未放行异常跟进</span>
     <span class="section-badge" id="unclearedDate">—</span>
+    <button style="margin-left:auto;padding:6px 14px;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer" onclick="openAddUnclearedModal()">＋ 新增未放行</button>
   </div>
   <div class="dimension-row" id="dimensionRow"></div>
   <div class="detail-panel" id="detailPanel">
@@ -974,6 +1025,13 @@ function bindEvents() {
     if (e.target === this) closeDailyRegisterModal();
   });
 
+  // Add uncleared item modal
+  document.getElementById('btnAddUnclearedCancel').addEventListener('click', closeAddUnclearedModal);
+  document.getElementById('btnAddUnclearedSubmit').addEventListener('click', submitAddUncleared);
+  document.getElementById('addUnclearedModal').addEventListener('click', function(e) {
+    if (e.target === this) closeAddUnclearedModal();
+  });
+
   // Batch operations
   document.getElementById('btnBatchClose').addEventListener('click', () => batchUpdateStatus('已闭环'));
   document.getElementById('btnBatchReopen').addEventListener('click', () => batchUpdateStatus('未闭环'));
@@ -1128,9 +1186,16 @@ function openEditModalById(recordId) {
   if (!record) { showToast('未找到该记录'); return; }
 
   document.getElementById('editRecordId').value = recordId;
-  document.getElementById('editRecordDesc').textContent = `${record.company || '—'} · ${record.customsNo || '—'} · ${record.date || '—'}`;
+  document.getElementById('editRecordDesc').textContent = `${record.company || '—'} · ${record.bolNo || record.customsNo || '—'} · ${record.date || '—'}`;
   document.getElementById('editCategory').value = record.category || '';
   document.getElementById('editStatus').value = (record.status && record.status.includes('未闭环')) ? '未闭环' : '已闭环';
+  document.getElementById('editBizUnit').value = record.bizUnit || '';
+  document.getElementById('editCompany').value = record.company || '';
+  document.getElementById('editImportExport').value = record.importExport || '';
+  document.getElementById('editAgent').value = record.agent || '';
+  document.getElementById('editCustomsNo').value = record.customsNo || '';
+  document.getElementById('editBolNo').value = record.bolNo || '';
+  document.getElementById('editContainerNo').value = record.containerNo || '';
   document.getElementById('editResponsible').value = record.responsible || '';
   document.getElementById('editFee').value = record.fee || '';
   document.getElementById('editDescription').value = record.description || '';
@@ -1229,13 +1294,27 @@ async function submitEditRecord() {
   const updates = {};
   const cat = document.getElementById('editCategory').value;
   const st = document.getElementById('editStatus').value;
+  const bizUnit = document.getElementById('editBizUnit').value.trim();
+  const company = document.getElementById('editCompany').value.trim();
+  const importExport = document.getElementById('editImportExport').value;
+  const agent = document.getElementById('editAgent').value.trim();
+  const customsNo = document.getElementById('editCustomsNo').value.trim();
+  const bolNo = document.getElementById('editBolNo').value.trim();
+  const containerNo = document.getElementById('editContainerNo').value.trim();
   const resp = document.getElementById('editResponsible').value;
-  const fee = document.getElementById('editFee').value;
-  const desc = document.getElementById('editDescription').value;
-  const prog = document.getElementById('editProgress').value;
+  const fee = document.getElementById('editFee').value.trim();
+  const desc = document.getElementById('editDescription').value.trim();
+  const prog = document.getElementById('editProgress').value.trim();
 
   if (cat) updates.category = cat;
   if (st) updates.status = st;
+  updates.bizUnit = bizUnit;
+  updates.company = company;
+  updates.importExport = importExport;
+  updates.agent = agent;
+  updates.customsNo = customsNo;
+  updates.bolNo = bolNo;
+  updates.containerNo = containerNo;
   updates.responsible = resp;
   updates.fee = fee;
   updates.description = desc;
@@ -1741,9 +1820,15 @@ function renderKPIs(data) {
     .filter(d => d.year === String(thisYear) && d.month === thisMonth)
     .reduce((s, d) => s + d.totalDeclared, 0);
 
-  const unclearedReason = latest.unclearedReason;
-  const unclearedCount = (!unclearedReason || unclearedReason === '无') ? 0 :
-    parseUnclearedDimensions(unclearedReason).reduce((s, dim) => s + dim.count, 0);
+  // Aggregate uncleared items across ALL records, not just the latest day
+  let unclearedCount = 0;
+  for (const record of dailies) {
+    const rc = record.reviewCompleted || 0;
+    if (rc <= 0) continue;
+    const reason = (record.unclearedReason || '').trim();
+    if (!reason || reason === '无') continue;
+    unclearedCount += parseUnclearedDimensions(reason).reduce((s, dim) => s + dim.count, 0);
+  }
 
   const openCount = abnormalRecs.filter(r =>
     r.status && (r.status.includes('未闭环') || r.status.includes('未关闭'))
@@ -2294,13 +2379,14 @@ function parseUnclearedDimensions(reasonStr) {
     { key: '查验', icon: 'inspect', emoji: '🔍' }
   ];
 
+  const dimKeys = dimensions.map(d => d.key);
   const result = [];
   for (let i = 0; i < dimensions.length; i++) {
     const dim = dimensions[i];
-    const nextDim = dimensions[i + 1];
 
-    // Find start: "key：", "key:", "key \n", or "key" followed by space and items
+    // Find start: dimension header like "\n公路：" or "公路："
     const startPatterns = [
+      '\n' + dim.key + '：', '\n' + dim.key + ':',
       dim.key + '：', dim.key + ':',
       dim.key + ' \n', dim.key + '\n',
       '\n' + dim.key + ' \n', '\n' + dim.key + '\n'
@@ -2312,13 +2398,15 @@ function parseUnclearedDimensions(reasonStr) {
     }
     if (startIdx === -1) { result.push({ ...dim, items: [], count: 0 }); continue; }
 
-    // Find end: next dimension header (with or without colon)
+    // Find end: the NEAREST dimension header AFTER startIdx (ANY dimension)
+    //   not just nextDim — text may list dimensions in any order
     let endIdx = reasonStr.length;
-    if (nextDim) {
+    for (const otherKey of dimKeys) {
+      if (otherKey === dim.key) continue;
       const endPatterns = [];
       for (const fmt of ['：', ':', ' \n', '\n']) {
-        endPatterns.push(nextDim.key + fmt);
-        endPatterns.push('\n' + nextDim.key + fmt);
+        endPatterns.push('\n' + otherKey + fmt);
+        endPatterns.push(otherKey + fmt);
       }
       for (const pat of endPatterns) {
         const idx = reasonStr.indexOf(pat, startIdx);
@@ -2330,16 +2418,18 @@ function parseUnclearedDimensions(reasonStr) {
     const lines = section.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const items = lines
       .filter(line => {
-        // Skip summary lines like "23\u7968\u5ba1\u7ed3\u672a\u653e\u884c"
-        if (/^\d+\u7968/.test(line)) return false;
-        if (/\u5ba1\u7ed3\u672a\u653e\u884c/.test(line)) return false;
+        // Skip summary lines like "23票审结未放行"
+        if (/^\d+票/.test(line)) return false;
+        if (/审结未放行/.test(line)) return false;
+        // Skip dimension headers (safety net — shouldn't appear with proper end detection)
+        if (/^(空运|驳船|大船|公路|查验)[：:]?\s*$/.test(line)) return false;
         return true;
       })
       .map(line => {
         const parts = line.split(/\s+/);
         const id = parts[0] || '';
         let reason = parts.slice(1).join(' ') || line;
-        if (dim.key === '\u67e5\u9a8c' && reason === id) reason = '\u9700\u8981\u67e5\u9a8c';
+        if (dim.key === '查验' && reason === id) reason = '需要查验';
         return { id, reason };
       }).filter(item => item.id);
 
@@ -2533,6 +2623,70 @@ async function transferDimensionItem(dailyRecordId, dimension, itemText) {
     }
   } catch(e) {
     showToast('转问题操作失败: ' + (e.message || '网络异常，请检查服务器'));
+  }
+}
+
+// ==================== ADD UNCLEARED ITEM ====================
+function openAddUnclearedModal() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('newUnclearedDate').value = today;
+  document.getElementById('newUnclearedDim').value = '空运';
+  document.getElementById('newUnclearedId').value = '';
+  document.getElementById('newUnclearedReason').value = '';
+  document.getElementById('addUnclearedModal').classList.add('show');
+}
+
+function closeAddUnclearedModal() {
+  document.getElementById('addUnclearedModal').classList.remove('show');
+}
+
+async function submitAddUncleared() {
+  const date = document.getElementById('newUnclearedDate').value.trim();
+  const dimension = document.getElementById('newUnclearedDim').value;
+  const itemId = document.getElementById('newUnclearedId').value.trim();
+  const reason = document.getElementById('newUnclearedReason').value.trim();
+
+  if (!date) { showToast('请选择日期'); return; }
+  if (!itemId) { showToast('请填写单号'); return; }
+
+  try {
+    // Step 1: ensure a daily record exists for this date
+    const ensureUrl = API_SERVER + '/api/daily-records/ensure';
+    const ensureRes = await fetch(ensureUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, _operator: operatorName })
+    });
+    if (!ensureRes.ok) throw new Error('无法创建或找到日报记录');
+
+    const ensureData = await ensureRes.json();
+    const recordId = ensureData.id;
+
+    // Step 2: add the item
+    const addUrl = API_SERVER + '/api/daily-records/' + encodeURIComponent(recordId) + '/add-item';
+    const addRes = await fetch(addUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dimension, item_id: itemId, reason, _operator: operatorName })
+    });
+    if (!addRes.ok) {
+      const errText = await addRes.text();
+      let errMsg = '服务器错误 ' + addRes.status;
+      try { const errJson = JSON.parse(errText); errMsg = errJson.error || errMsg; } catch(e) {}
+      throw new Error(errMsg);
+    }
+
+    const addData = await addRes.json();
+    if (addData.success) {
+      showToast('✅ 已新增未放行条目: ' + itemId);
+      closeAddUnclearedModal();
+      await fetchCloudData();
+      renderAll();
+    } else {
+      showToast('操作失败: ' + (addData.error || '未知'));
+    }
+  } catch(e) {
+    showToast('新增未放行失败: ' + (e.message || '网络异常，请检查服务器'));
   }
 }
 
