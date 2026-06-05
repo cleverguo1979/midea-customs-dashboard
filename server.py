@@ -499,6 +499,19 @@ def static_files(filename):
     return send_from_directory(BASE_DIR, filename)
 
 
+@app.route('/api/health', methods=['GET'])
+def health():
+    """Health check endpoint for monitoring."""
+    db = get_db()
+    daily_count = db.execute("SELECT COUNT(*) as cnt FROM daily_records").fetchone()['cnt']
+    latest = db.execute("SELECT MAX(date) as max_date FROM daily_records").fetchone()['max_date']
+    return jsonify({
+        'status': 'ok',
+        'daily_records': daily_count,
+        'latest_date': latest or 'N/A'
+    })
+
+
 @app.route('/api/data', methods=['GET'])
 def get_data():
     """Return the current stored data (same format as before for compatibility)."""
