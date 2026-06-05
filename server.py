@@ -25,12 +25,19 @@ import openpyxl
 app = Flask(__name__, static_folder=None)
 
 # CORS — allow access from GitHub Pages and any origin
+# Also prevent all caching — data must always be fresh
 @app.after_request
 def add_cors_headers(response):
     response.headers['Access-Control-Allow-Origin'] = '*'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Operator'
     response.headers['Access-Control-Max-Age'] = '86400'
+    # Prevent caching for API responses (static files excluded by nginx/CDN config, but we
+    # are extra careful here since Render.com may inject its own cache layer)
+    if request.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
     return response
 
 
@@ -496,7 +503,11 @@ def static_files(filename):
 def get_data():
     """Return the current stored data (same format as before for compatibility)."""
     data = get_current_data()
-    return jsonify(data)
+    resp = jsonify(data)
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    return resp
 
 
 # ---------------- Upload (merge mode) ----------------

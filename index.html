@@ -730,6 +730,7 @@
   <div class="data-status" id="dataStatus">
     <span><span class="dot empty" id="statusDot"></span><span id="statusText">暂无数据，请口岸单位上传 Excel 报表</span></span>
     <span id="statusExtra"></span>
+    <button id="btnRefresh" onclick="forceRefresh()" title="从服务器强制刷新数据" style="display:none;padding:4px 12px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer">🔄 刷新数据</button>
   </div>
 
   <!-- KPI Cards -->
@@ -872,21 +873,39 @@ function saveTokens(aiKey) {
   aiCache = null;
 }
 
+let dataSource = 'none'; // 'cloud' | 'local' | 'none'
+
 async function init() {
   loadFromStorage();
+  const hadLocalData = hasAppData();
   loadTokens();
   loadOperatorName();
   const cloudLoaded = await fetchCloudData();
-  if (!cloudLoaded) {
-    console.log('No cloud data, using localStorage');
+  if (cloudLoaded) {
+    dataSource = 'cloud';
+    console.log('[看板] Data from cloud (live)');
+  } else if (hadLocalData) {
+    dataSource = 'local';
+    console.warn('[看板] Cloud unavailable, showing LOCAL CACHE — data may be STALE!');
+  } else {
+    dataSource = 'none';
   }
   renderAll();
   bindEvents();
 }
 
+function hasAppData() {
+  for (const y of ['2025', '2026']) {
+    if (appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0) return true;
+  }
+  return false;
+}
+
 async function fetchCloudData() {
   try {
-    const resp = await fetch(API_SERVER + '/api/data', { cache: 'no-cache' });
+    // Cache-busting: prevent browser/CDN from serving stale API response
+    const cacheBuster = '_cb=' + Date.now();
+    const resp = await fetch(API_SERVER + '/api/data?' + cacheBuster, { cache: 'no-store' });
     if (!resp.ok) return false;
     const cloud = await resp.json();
     let hasData = false;
@@ -897,14 +916,26 @@ async function fetchCloudData() {
       }
     }
     if (hasData) {
-      try { localStorage.setItem('midea_dashboard_data', JSON.stringify(appData)); } catch(e) {}
-      console.log('Cloud data loaded from:', api);
+      dataSource = 'cloud';
+      const toSave = { _version: DATA_VERSION };
+      for (const y of ['2025', '2026']) { if (appData[y]) toSave[y] = appData[y]; }
+      try { localStorage.setItem('midea_dashboard_data', JSON.stringify(toSave)); } catch(e) {}
+      console.log('[看板] Cloud data loaded, latest:', getLatestDate());
     }
     return hasData;
   } catch(e) {
-    console.warn('Cloud fetch failed:', e.message);
+    console.warn('[看板] Cloud fetch failed:', e.message);
     return false;
   }
+}
+
+function getLatestDate() {
+  for (const y of ['2026', '2025']) {
+    if (appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0) {
+      return appData[y].dailyData[appData[y].dailyData.length - 1].date;
+    }
+  }
+  return null;
 }
 
 async function pushToCloud(dataToSave) {
@@ -1614,9 +1645,12 @@ async function handleFileUpload(e) {
     return;
   }
 
-  // Reload data from server
-  await fetchCloudData();
-  saveToStorage();
+  // Reload data from server with cache-busting
+  const cloudLoaded = await fetchCloudData();
+  if (cloudLoaded) {
+    dataSource = 'cloud';
+    saveToStorage();
+  }
 
   const years = Object.keys(appData).filter(y => appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0).sort();
   if (years.length > 0) {
@@ -1768,17 +1802,57 @@ function updateStatusBar(hasData, data) {
   const text = document.getElementById('statusText');
   const extra = document.getElementById('statusExtra');
   const btn = document.getElementById('btnReset');
-  dot.className = 'dot ' + (hasData ? 'loaded' : 'empty');
+  const refreshBtn = document.getElementById('btnRefresh');
+  const bar = document.getElementById('dataStatus');
+
   if (hasData) {
     const latestDate = data.dailyData[data.dailyData.length - 1].date;
-    text.textContent = `数据已加载 · 最新日期 ${latestDate}`;
-    extra.textContent = `${data.dailyData.length} 天记录 | ${(data.abnormalRecords || []).length} 条异常`;
+    if (dataSource === 'local') {
+      // WARNING: showing stale cached data from localStorage
+      dot.className = 'dot empty';
+      bar.style.background = 'rgba(255,149,0,0.12)';
+      bar.style.border = '1px solid rgba(255,149,0,0.4)';
+      text.innerHTML = `⚠️ <b>离线缓存数据</b> · 最新日期 ${latestDate} · <span style="color:#ff9500">服务器连接失败，数据可能已过期！</span>`;
+      extra.textContent = `请检查网络或点击刷新重试 · ${data.dailyData.length} 天记录`;
+      refreshBtn.style.display = '';
+    } else {
+      dot.className = 'dot loaded';
+      bar.style.background = 'rgba(52,199,89,0.08)';
+      bar.style.border = '1px solid rgba(52,199,89,0.25)';
+      text.textContent = `✅ 实时数据 · 最新日期 ${latestDate}`;
+      extra.textContent = `${data.dailyData.length} 天记录 | ${(data.abnormalRecords || []).length} 条异常`;
+      refreshBtn.style.display = 'none';
+    }
     btn.style.display = '';
   } else {
+    dot.className = 'dot empty';
+    bar.style.background = 'rgba(0,113,227,0.06)';
+    bar.style.border = 'none';
     text.textContent = `暂无数据，请口岸单位上传 Excel 报表（支持 2025/2026 年）`;
     extra.textContent = '上传后自动更新看板';
     btn.style.display = 'none';
+    refreshBtn.style.display = '';
   }
+}
+
+async function forceRefresh() {
+  const refreshBtn = document.getElementById('btnRefresh');
+  refreshBtn.textContent = '⏳ 刷新中...';
+  refreshBtn.disabled = true;
+  const cloudLoaded = await fetchCloudData();
+  if (cloudLoaded) {
+    dataSource = 'cloud';
+    showToast('✅ 数据已从服务器更新');
+  } else if (hasAppData()) {
+    dataSource = 'local';
+    showToast('⚠️ 服务器无响应，显示本地缓存');
+  } else {
+    dataSource = 'none';
+    showToast('❌ 服务器无数据，请上传 Excel 报表');
+  }
+  renderAll();
+  refreshBtn.textContent = '🔄 刷新数据';
+  refreshBtn.disabled = false;
 }
 
 function updateNavbar(data) {
