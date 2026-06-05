@@ -848,8 +848,8 @@ const IS_DEV = window.location.protocol === 'file:' ||
                window.location.hostname.startsWith('10.') ||
                /^172\.(1[6-9]|2\d|3[01])\./.test(window.location.hostname);
 const CUSTOM_DOMAIN = 'cleverguo.cn';
-const IS_CUSTOM_DOMAIN = window.location.hostname === CUSTOM_DOMAIN;
-const API_SERVER = (IS_DEV || IS_CUSTOM_DOMAIN) ? window.location.origin : ('https://' + CUSTOM_DOMAIN);
+const IS_CUSTOM_DOMAIN = window.location.hostname.endsWith('.' + CUSTOM_DOMAIN) || window.location.hostname === CUSTOM_DOMAIN;
+const API_SERVER = (IS_DEV || IS_CUSTOM_DOMAIN) ? window.location.origin : ('https://board.' + CUSTOM_DOMAIN);
 console.log('[看板] host=' + window.location.hostname + ' API=' + API_SERVER);
 
 // ==================== DATE UTILS ====================
