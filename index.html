@@ -100,6 +100,9 @@
   .data-status .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 6px; }
   .data-status .dot.loaded { background: var(--green); }
   .data-status .dot.empty { background: #c7c7cc; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .polling-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); display: inline-block; animation: pulse 1.5s ease-in-out infinite; vertical-align: middle; }
+  .polling-text { font-size: 11px; color: var(--accent); margin-left: 4px; }
 
   /* Charts */
   .chart-row { margin-bottom: 28px; }
@@ -730,7 +733,10 @@
   <div class="data-status" id="dataStatus">
     <span><span class="dot empty" id="statusDot"></span><span id="statusText">暂无数据，请口岸单位上传 Excel 报表</span></span>
     <span id="statusExtra"></span>
-    <button id="btnRefresh" onclick="forceRefresh()" title="从服务器强制刷新数据" style="display:none;padding:4px 12px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer">🔄 刷新数据</button>
+    <span style="display:flex;align-items:center;gap:6px">
+      <span id="pollingWrap" style="display:none"><span class="polling-dot"></span><span class="polling-text">自动刷新中</span></span>
+      <button id="btnRefresh" onclick="forceRefresh()" title="从服务器强制刷新数据" style="display:none;padding:4px 12px;font-size:12px;background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer">🔄 刷新数据</button>
+    </span>
   </div>
 
   <!-- KPI Cards -->
@@ -897,6 +903,7 @@ async function init() {
   }
   renderAll();
   bindEvents();
+  startPolling();
 }
 
 function hasAppData() {
@@ -1838,6 +1845,7 @@ function updateStatusBar(hasData, data) {
     btn.style.display = 'none';
     refreshBtn.style.display = '';
   }
+  updatePollingUI();
 }
 
 async function forceRefresh() {
@@ -3094,6 +3102,99 @@ function showToast(msg) {
   toast.classList.add('show');
   clearTimeout(toast._tid);
   toast._tid = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+// ==================== AUTO POLLING ====================
+const POLLING_INTERVAL_MS = 5000;
+let pollingTimer = null;
+let pollingActive = false;
+
+function startPolling() {
+  if (pollingActive) return;
+  pollingActive = true;
+  console.log('[看板] 自动刷新已启动 (每5秒)');
+  updatePollingUI();
+  scheduleNextPoll();
+  document.addEventListener('visibilitychange', onVisibilityChange);
+}
+
+function stopPolling() {
+  pollingActive = false;
+  if (pollingTimer) {
+    clearTimeout(pollingTimer);
+    pollingTimer = null;
+  }
+  document.removeEventListener('visibilitychange', onVisibilityChange);
+  updatePollingUI();
+}
+
+function scheduleNextPoll() {
+  if (!pollingActive) return;
+  pollingTimer = setTimeout(async () => {
+    await pollOnce();
+    if (pollingActive) scheduleNextPoll();
+  }, POLLING_INTERVAL_MS);
+}
+
+async function pollOnce() {
+  try {
+    const prevCounts = {};
+    for (const y of ['2025', '2026']) {
+      if (appData[y] && appData[y].dailyData) {
+        prevCounts[y] = appData[y].dailyData.length;
+      } else {
+        prevCounts[y] = 0;
+      }
+    }
+
+    const cloudLoaded = await fetchCloudData();
+
+    if (cloudLoaded) {
+      dataSource = 'cloud';
+      // Check if data actually changed
+      let changed = false;
+      for (const y of ['2025', '2026']) {
+        const prevLen = prevCounts[y] || 0;
+        const newLen = (appData[y] && appData[y].dailyData) ? appData[y].dailyData.length : 0;
+        if (newLen !== prevLen) {
+          changed = true;
+          break;
+        }
+      }
+
+      if (changed) {
+        console.log('[看板] 轮询检测到数据更新，自动刷新看板');
+        renderAll();
+      }
+    }
+
+    updatePollingUI();
+  } catch (e) {
+    console.warn('[看板] 轮询出错:', e.message);
+    updatePollingUI();
+  }
+}
+
+function onVisibilityChange() {
+  if (document.hidden) {
+    // 页面隐藏时暂停轮询，节省带宽
+    if (pollingTimer) {
+      clearTimeout(pollingTimer);
+      pollingTimer = null;
+    }
+  } else {
+    // 页面恢复时立即检查一次
+    if (pollingActive && !pollingTimer) {
+      pollOnce().then(() => { if (pollingActive) scheduleNextPoll(); });
+    }
+  }
+}
+
+function updatePollingUI() {
+  const wrap = document.getElementById('pollingWrap');
+  if (wrap) {
+    wrap.style.display = (pollingActive && dataSource === 'cloud') ? '' : 'none';
+  }
 }
 
 // ==================== BOOT ====================
