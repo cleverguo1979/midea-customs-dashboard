@@ -837,15 +837,20 @@ let apiKey = '';
 let aiCache = null;
 let batchSelected = new Set();
 let operatorName = '匿名';
-// Cloud API server — deployed at Render. All users share data through this.
+// API server detection:
+// - Local dev (localhost/LAN IP) → use same origin
+// - Custom domain (cleverguo.cn) → use same origin (frontend + backend on one server)
+// - GitHub Pages → use custom domain as API server
 const IS_DEV = window.location.protocol === 'file:' ||
                window.location.hostname === 'localhost' ||
                window.location.hostname === '127.0.0.1' ||
                window.location.hostname.startsWith('192.168.') ||
                window.location.hostname.startsWith('10.') ||
                /^172\.(1[6-9]|2\d|3[01])\./.test(window.location.hostname);
-const API_SERVER = IS_DEV ? window.location.origin : 'https://midea-customs-dashboard.onrender.com';
-console.log('[看板] IS_DEV=' + IS_DEV + ' API_SERVER=' + API_SERVER);
+const CUSTOM_DOMAIN = 'cleverguo.cn';
+const IS_CUSTOM_DOMAIN = window.location.hostname === CUSTOM_DOMAIN;
+const API_SERVER = (IS_DEV || IS_CUSTOM_DOMAIN) ? window.location.origin : ('https://' + CUSTOM_DOMAIN);
+console.log('[看板] host=' + window.location.hostname + ' API=' + API_SERVER);
 
 // ==================== DATE UTILS ====================
 // Standard Excel serial → JS Date (works across timezones)
