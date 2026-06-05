@@ -45,8 +45,7 @@
   .hero p { font-size: 17px; color: var(--text-secondary); line-height: 1.6; }
 
   /* Cards Grid */
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; }
-
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
   .card {
     background: var(--card-bg);
     backdrop-filter: blur(20px);
@@ -58,8 +57,9 @@
     text-decoration: none;
     color: var(--text);
     transition: all 0.25s;
-    display: block;
+    display: flex; flex-direction: column;
     cursor: pointer;
+    height: 100%;
   }
   .card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.1); }
 
@@ -88,13 +88,13 @@
 <body>
 
 <nav class="nav">
-  <span class="nav-title">美的业务管理</span>
+  <img src="cosco.png" alt="COSCO" style="height:36px">
   <span class="nav-sub">Midea Business Portal</span>
 </nav>
 
 <div class="main">
   <div class="hero">
-    <h1>业务管理系统</h1>
+    <h1>美的业务管理系统</h1>
     <p>统一入口，高效协作</p>
   </div>
 
@@ -103,7 +103,7 @@
     <!-- 关务看板 -->
     <a href="https://board.cleverguo.cn" class="card">
       <div class="card-icon">📊</div>
-      <div class="card-title">业务关务看板</div>
+      <div class="card-title">业务看板</div>
       <div class="card-desc">海关申报日报、异常跟进、数据分析。支持 2025/2026 年度数据实时查询与闭环管理。</div>
       <span class="card-tag">已上线</span>
     </a>
@@ -111,8 +111,8 @@
     <!-- 大船排期 -->
     <a href="https://ship.cleverguo.cn" class="card">
       <div class="card-icon">🚢</div>
-      <div class="card-title">大船排期</div>
-      <div class="card-desc">出口排船、舱位规划、船期管理、集装箱出运表匹配。</div>
+      <div class="card-title">大船排期计划</div>
+      <div class="card-desc">出口排船、台账管理。</div>
       <span class="card-tag">已上线</span>
     </a>
 
@@ -126,7 +126,7 @@
 
   </div>
 
-  <div class="footer">© 2026 美的 · 业务管理平台</div>
+  <div class="footer">© 2026 远海通全球智能关务平台</div>
 </div>
 
 </body>
