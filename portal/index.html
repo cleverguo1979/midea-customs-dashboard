@@ -34,7 +34,6 @@
     padding: 0 40px; height: 64px;
     display: flex; align-items: center; justify-content: space-between;
   }
-  .nav-title { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
   .nav-sub { font-size: 13px; color: var(--text-secondary); }
 
   .main { max-width: 1200px; margin: 0 auto; padding: 48px 40px; }
@@ -59,7 +58,6 @@
     transition: all 0.25s;
     display: flex; flex-direction: column;
     cursor: pointer;
-    height: 100%;
   }
   .card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.1); }
 
@@ -67,9 +65,10 @@
   .card-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.3px; }
   .card-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
   .card-tag {
-    display: inline-block; margin-top: 16px; padding: 4px 12px;
+    display: inline-block; margin-top: auto; padding: 4px 12px;
     font-size: 11px; font-weight: 600; color: var(--accent);
     background: rgba(0,113,227,0.08); border-radius: 20px;
+    align-self: flex-start;
   }
   .card.coming-soon { opacity: 0.5; pointer-events: none; }
   .card.coming-soon .card-tag { color: #8e8e93; background: rgba(142,142,147,0.12); }
