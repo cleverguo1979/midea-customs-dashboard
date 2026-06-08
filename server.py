@@ -1223,6 +1223,11 @@ def export_report():
         row_height = max(15, max_lines * 15.6)
         ws_abnormal.row_dimensions[row_num].height = row_height
 
+    # Remove conditional formatting from column H (提单号) — only keep on G (报关单号)
+    cf_to_keep = [cf for cf in ws_abnormal.conditional_formatting
+                  if not str(cf.sqref).replace('$', '').startswith('H')]
+    ws_abnormal.conditional_formatting = cf_to_keep
+
     # ============================================================
     # Remove 2025 sheets and Sheet3 (only keep 2026 sheets)
     # ============================================================
