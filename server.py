@@ -1123,6 +1123,12 @@ def export_report():
             elif 'number_format' in style:
                 cell.number_format = style['number_format']
 
+        # Auto-adjust row height based on unclearedReason content
+        reason_text = (record['unclearedReason'] or '').strip()
+        lines = reason_text.count('\n') + 1 if reason_text and reason_text != '无' else 1
+        row_height = max(15, lines * 15.6)  # ~15.6pt per line at 11pt font
+        ws_daily.row_dimensions[row_num].height = row_height
+
     # ============================================================
     # Process "2026年异常跟踪表" sheet
     # ============================================================
@@ -1203,6 +1209,13 @@ def export_report():
                 cell.number_format = 'YYYY-MM-DD'
             elif 'number_format' in style:
                 cell.number_format = style['number_format']
+
+        # Auto-adjust row height based on the longest text column
+        desc_lines = (record['description'] or '').count('\n') + 1
+        prog_lines = (record['progress'] or '').count('\n') + 1
+        max_lines = max(desc_lines, prog_lines, 1)
+        row_height = max(15, max_lines * 15.6)
+        ws_abnormal.row_dimensions[row_num].height = row_height
 
     # ============================================================
     # Remove 2025 sheets and Sheet3 (only keep 2026 sheets)
