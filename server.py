@@ -1209,8 +1209,9 @@ def export_report():
     wb.save(output)
     output.seek(0)
 
-    # Generate filename based on requested date
-    target_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    # Generate filename based on requested date (default: yesterday)
+    yesterday = datetime.now() - timedelta(days=1)
+    target_date = request.args.get('date', yesterday.strftime('%Y-%m-%d'))
     try:
         dt = datetime.strptime(target_date, '%Y-%m-%d')
         filename = f'华东口岸申报日报关情况 {dt.month}.{dt.day}.xlsx'
@@ -1242,8 +1243,9 @@ def export_text_report():
 
     db = get_db()
 
-    # Parse target date
-    target_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    # Parse target date (default: yesterday)
+    yesterday = datetime.now() - timedelta(days=1)
+    target_date = request.args.get('date', yesterday.strftime('%Y-%m-%d'))
     try:
         dt = datetime.strptime(target_date, '%Y-%m-%d')
     except ValueError:

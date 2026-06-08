@@ -1009,8 +1009,8 @@ async function exportDailyReport() {
   btn.textContent = '⏳ 导出中...';
   btn.disabled = true;
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const resp = await fetch(API_SERVER + '/api/export-report?date=' + encodeURIComponent(today), {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const resp = await fetch(API_SERVER + '/api/export-report?date=' + encodeURIComponent(yesterday), {
       method: 'GET'
     });
     if (!resp.ok) {
@@ -1049,8 +1049,8 @@ async function exportTextReport() {
   btn.textContent = '⏳ 导出中...';
   btn.disabled = true;
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const resp = await fetch(API_SERVER + '/api/export-text-report?date=' + encodeURIComponent(today), {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const resp = await fetch(API_SERVER + '/api/export-text-report?date=' + encodeURIComponent(yesterday), {
       method: 'GET'
     });
     if (!resp.ok) {
