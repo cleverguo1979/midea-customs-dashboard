@@ -355,13 +355,12 @@ def parse_workbook(filepath):
         for row in ws.iter_rows(min_row=2, max_row=ws.max_row, values_only=True):
             if not row[0]:
                 continue
-            # Skip empty placeholder rows: seq exists but all data columns are blank
-            row_has_data = False
-            for cell in row[2:15]:  # columns C to O (category through agent)
-                if cell is not None and str(cell).strip():
-                    row_has_data = True
-                    break
-            if not row_has_data:
+            # Skip empty placeholder rows: seq exists but no real data
+            # Check essential fields (date + company) are non-empty
+            date_val = row[1]
+            company_val = row[4]
+            if (date_val is None or str(date_val).strip() == '') and \
+               (company_val is None or str(company_val).strip() == ''):
                 continue
             try:
                 serial = int(row[1])
