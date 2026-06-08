@@ -1112,10 +1112,13 @@ def export_report():
                 cell.font = style['font']
             if 'alignment' in style:
                 cell.alignment = style['alignment']
-            if 'number_format' in style:
-                cell.number_format = style['number_format']
             if 'border' in style:
                 cell.border = style['border']
+            # Column A (日期): use explicit date format so Excel displays it properly
+            if col == 1:
+                cell.number_format = 'YYYY-MM-DD'
+            elif 'number_format' in style:
+                cell.number_format = style['number_format']
 
     # ============================================================
     # Process "2026年异常跟踪表" sheet
@@ -1190,10 +1193,13 @@ def export_report():
                 cell.font = style['font']
             if 'alignment' in style:
                 cell.alignment = style['alignment']
-            if 'number_format' in style:
-                cell.number_format = style['number_format']
             if 'border' in style:
                 cell.border = style['border']
+            # Column B (发生/发现日期): use explicit date format
+            if col == 2:
+                cell.number_format = 'YYYY-MM-DD'
+            elif 'number_format' in style:
+                cell.number_format = style['number_format']
 
     # ============================================================
     # Remove 2025 sheets and Sheet3 (only keep 2026 sheets)
