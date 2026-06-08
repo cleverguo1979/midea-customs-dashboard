@@ -1230,6 +1230,68 @@ def export_report():
         row_height = max(15, max_lines * 15.6)
         ws_abnormal.row_dimensions[row_num].height = row_height
 
+    # ============================================================
+    # Merge column H (提运单号) cells for consecutive rows with the same value
+    # Only merge 提单号 column; all other columns stay separate
+    # ============================================================
+    if len(abnormal_rows) >= 2:
+        merge_start = 2  # first data row
+        prev_bol = abnormal_rows[0]['bolNo'] or ''
+        for i in range(1, len(abnormal_rows)):
+            cur_bol = abnormal_rows[i]['bolNo'] or ''
+            if cur_bol and prev_bol and cur_bol == prev_bol:
+                # same 提单号 continues — extend merge range
+                if i == len(abnormal_rows) - 1:
+                    # last row, close merge
+                    if merge_start < 2 + i:
+                        ws_abnormal.merge_cells(
+                            start_row=merge_start, end_row=2 + i,
+                            start_column=8, end_column=8  # column H only
+                        )
+            else:
+                # 提单号 changed — close previous merge if 2+ rows
+                if merge_start < 2 + i - 1:
+                    ws_abnormal.merge_cells(
+                        start_row=merge_start, end_row=2 + i - 1,
+                        start_column=8, end_column=8
+                    )
+                merge_start = 2 + i
+                prev_bol = cur_bol
+
+    # ============================================================
+    # Merge column J (异常情况描述) for consecutive grouped records
+    # Rule: first row has description + subsequent rows are empty +
+    #        share same date + company + category
+    # ============================================================
+    if len(abnormal_rows) >= 2:
+        i = 0
+        while i < len(abnormal_rows):
+            desc = (abnormal_rows[i]['description'] or '').strip()
+            if not desc:
+                i += 1
+                continue
+
+            # Found a row with description — look ahead for empty-description siblings
+            group_start = i
+            j = i + 1
+            while j < len(abnormal_rows):
+                cur_desc = (abnormal_rows[j]['description'] or '').strip()
+                if (cur_desc == '' and
+                    abnormal_rows[j]['date'] == abnormal_rows[group_start]['date'] and
+                    (abnormal_rows[j]['category'] or '') == (abnormal_rows[group_start]['category'] or '')):
+                    j += 1
+                else:
+                    break
+
+            # Merge J column (col 10) if 2+ rows in group
+            if j - group_start >= 2:
+                ws_abnormal.merge_cells(
+                    start_row=2 + group_start, end_row=2 + j - 1,
+                    start_column=10, end_column=10
+                )
+
+            i = j  # Skip past the group
+
     # Remove conditional formatting from column H (提单号) — only keep on G (报关单号)
     cf_to_keep = [cf for cf in ws_abnormal.conditional_formatting
                   if not str(cf.sqref).replace('$', '').startswith('H')]
