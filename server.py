@@ -355,6 +355,14 @@ def parse_workbook(filepath):
         for row in ws.iter_rows(min_row=2, max_row=ws.max_row, values_only=True):
             if not row[0]:
                 continue
+            # Skip empty placeholder rows: seq exists but all data columns are blank
+            row_has_data = False
+            for cell in row[2:15]:  # columns C to O (category through agent)
+                if cell is not None and str(cell).strip():
+                    row_has_data = True
+                    break
+            if not row_has_data:
+                continue
             try:
                 serial = int(row[1])
                 date_str = excel_serial_to_date(serial).strftime('%Y-%m-%d') if serial > 40000 else str(row[1] or '').strip()
