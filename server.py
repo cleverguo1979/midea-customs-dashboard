@@ -594,16 +594,17 @@ def upload():
                 ))
                 total_daily += 1
 
-            # Merge abnormal records — dedup by customsNo + date + company
-            # (Using company as tiebreaker to avoid false matches on '未申报' etc.)
+            # Merge abnormal records — dedup by customsNo + date + company + bolNo
+            # For records where customsNo is '未申报', bolNo acts as the real unique key
             for r in year_data.get('abnormalRecords', []):
                 customs_no = str(r.get('customsNo', '')).strip()
                 rec_date = str(r.get('date', '')).strip()
                 rec_company = str(r.get('company', '')).strip()
+                bol_no = str(r.get('bolNo', '')).strip()
                 if rec_date:
                     existing = db.execute(
-                        "SELECT id FROM abnormal_records WHERE customsNo = ? AND date = ? AND company = ? AND deleted = 0",
-                        (customs_no, rec_date, rec_company)
+                        "SELECT id FROM abnormal_records WHERE customsNo = ? AND date = ? AND company = ? AND bolNo = ? AND deleted = 0",
+                        (customs_no, rec_date, rec_company, bol_no)
                     ).fetchone()
                     if existing:
                         continue
