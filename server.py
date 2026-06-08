@@ -594,14 +594,16 @@ def upload():
                 ))
                 total_daily += 1
 
-            # Merge abnormal records — skip by customsNo + date combination
+            # Merge abnormal records — dedup by customsNo + date + company
+            # (Using company as tiebreaker to avoid false matches on '未申报' etc.)
             for r in year_data.get('abnormalRecords', []):
                 customs_no = str(r.get('customsNo', '')).strip()
                 rec_date = str(r.get('date', '')).strip()
-                if customs_no and rec_date:
+                rec_company = str(r.get('company', '')).strip()
+                if rec_date:
                     existing = db.execute(
-                        "SELECT id FROM abnormal_records WHERE customsNo = ? AND date = ? AND deleted = 0",
-                        (customs_no, rec_date)
+                        "SELECT id FROM abnormal_records WHERE customsNo = ? AND date = ? AND company = ? AND deleted = 0",
+                        (customs_no, rec_date, rec_company)
                     ).fetchone()
                     if existing:
                         continue
@@ -1168,7 +1170,7 @@ def export_report():
             serial = date_str
 
         values = [
-            i + 1,                         # A: 序号 (re-numbered)
+            record['seq'],                # A: 序号 (keep original, don't re-number)
             serial,                        # B: 发生/发现日期
             record['category'] or '',       # C: 异常类别
             record['bizUnit'] or '',        # D: 事业部
