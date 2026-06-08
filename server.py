@@ -1039,9 +1039,12 @@ def export_report():
         "SELECT * FROM daily_records WHERE year = '2026' ORDER BY date"
     ).fetchall()
 
-    # Query all 2026 abnormal records (not deleted)
+    # Query all 2026 abnormal records (not deleted), skip empty placeholder rows
     abnormal_rows = db.execute(
-        "SELECT * FROM abnormal_records WHERE year = '2026' AND deleted = 0 ORDER BY seq"
+        "SELECT * FROM abnormal_records WHERE year = '2026' AND deleted = 0"
+        " AND (date != '' AND date IS NOT NULL)"
+        " AND (company != '' AND company IS NOT NULL)"
+        " ORDER BY seq"
     ).fetchall()
 
     # Find the latest Excel template for styles
