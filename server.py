@@ -21,6 +21,7 @@ except ImportError:
     sys.exit(1)
 
 import openpyxl
+import openpyxl.styles
 
 app = Flask(__name__, static_folder=None)
 
@@ -1014,6 +1015,425 @@ def get_operations():
             "SELECT * FROM operations ORDER BY timestamp DESC LIMIT ?", (limit,)
         ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
+# ---------------- Export Report ----------------
+
+@app.route('/api/export-report', methods=['GET'])
+def export_report():
+    """Export daily report Excel file from database data.
+
+    Uses the latest Excel template for formatting, populates 2026 daily
+    and abnormal records from SQLite, and returns only the two 2026 sheets.
+    """
+    from io import BytesIO
+    from urllib.parse import quote
+
+    db = get_db()
+
+    # Query all 2026 daily records
+    daily_rows = db.execute(
+        "SELECT * FROM daily_records WHERE year = '2026' ORDER BY date"
+    ).fetchall()
+
+    # Query all 2026 abnormal records (not deleted)
+    abnormal_rows = db.execute(
+        "SELECT * FROM abnormal_records WHERE year = '2026' AND deleted = 0 ORDER BY seq"
+    ).fetchall()
+
+    # Load the latest Excel template for styles
+    template_path = os.path.join(BASE_DIR, '华东口岸申报日报关情况 6.4.xlsx')
+    if not os.path.exists(template_path):
+        return jsonify({'error': '模板文件不存在: ' + template_path}), 500
+
+    wb = openpyxl.load_workbook(template_path)
+
+    # ============================================================
+    # Process "2026 日报关情况" sheet
+    # ============================================================
+    ws_daily = wb['2026 日报关情况']
+
+    # Unmerge all merged cells in data area (from row 3 onwards, but keep A1:E1 title)
+    for mc in list(ws_daily.merged_cells.ranges):
+        if mc.min_row >= 3:
+            ws_daily.unmerge_cells(str(mc))
+
+    # Capture styles from the first data row (row 3) before deleting
+    daily_styles = {}
+    for col in range(1, 6):
+        cell = ws_daily.cell(row=3, column=col)
+        daily_styles[col] = {
+            'font': openpyxl.styles.Font(
+                name=cell.font.name,
+                size=cell.font.size,
+                bold=cell.font.bold,
+                color=cell.font.color
+            ),
+            'alignment': openpyxl.styles.Alignment(
+                horizontal=cell.alignment.horizontal or 'center',
+                vertical=cell.alignment.vertical or 'center',
+                wrap_text=(col == 5)  # wrap text for the reason column
+            ),
+            'number_format': cell.number_format,
+            'border': openpyxl.styles.Border(
+                left=cell.border.left, right=cell.border.right,
+                top=cell.border.top, bottom=cell.border.bottom
+            ),
+        }
+
+    # Delete all old data rows (rows 3 to end)
+    if ws_daily.max_row >= 3:
+        ws_daily.delete_rows(3, ws_daily.max_row - 2)
+
+    # Write fresh data from database
+    for i, record in enumerate(daily_rows):
+        row_num = 3 + i
+        date_str = record['date']
+        try:
+            dt = datetime.strptime(date_str, '%Y-%m-%d')
+            serial = (dt - datetime(1899, 12, 30)).days
+        except (ValueError, TypeError):
+            serial = date_str
+
+        values = [
+            serial,
+            record['totalDeclared'] or 0,
+            record['totalReleased'] or 0,
+            record['reviewCompleted'] or 0,
+            (record['unclearedReason'] or '').strip() or '无'
+        ]
+
+        for col, val in enumerate(values, 1):
+            cell = ws_daily.cell(row=row_num, column=col, value=val)
+            style = daily_styles.get(col, {})
+            if 'font' in style:
+                cell.font = style['font']
+            if 'alignment' in style:
+                cell.alignment = style['alignment']
+            if 'number_format' in style:
+                cell.number_format = style['number_format']
+            if 'border' in style:
+                cell.border = style['border']
+
+    # ============================================================
+    # Process "2026年异常跟踪表" sheet
+    # ============================================================
+    ws_abnormal = wb['2026年异常跟踪表']
+
+    # Unmerge all data-area merged cells (from row 2 onwards)
+    for mc in list(ws_abnormal.merged_cells.ranges):
+        if mc.min_row >= 2:
+            ws_abnormal.unmerge_cells(str(mc))
+
+    # Capture styles from the first data row (row 2) before deleting
+    abnormal_styles = {}
+    for col in range(1, 17):
+        cell = ws_abnormal.cell(row=2, column=col)
+        abnormal_styles[col] = {
+            'font': openpyxl.styles.Font(
+                name=cell.font.name,
+                size=cell.font.size,
+                bold=cell.font.bold,
+                color=cell.font.color
+            ),
+            'alignment': openpyxl.styles.Alignment(
+                horizontal=cell.alignment.horizontal or 'center',
+                vertical=cell.alignment.vertical or 'center',
+                wrap_text=(col in (10, 13))  # wrap for 异常描述 and 处理进度
+            ),
+            'number_format': cell.number_format,
+            'border': openpyxl.styles.Border(
+                left=cell.border.left, right=cell.border.right,
+                top=cell.border.top, bottom=cell.border.bottom
+            ),
+        }
+
+    # Delete all old data rows (rows 2 to end)
+    if ws_abnormal.max_row >= 2:
+        ws_abnormal.delete_rows(2, ws_abnormal.max_row - 1)
+
+    # Write fresh data from database
+    for i, record in enumerate(abnormal_rows):
+        row_num = 2 + i
+        date_str = record['date']
+        try:
+            dt = datetime.strptime(date_str, '%Y-%m-%d')
+            serial = (dt - datetime(1899, 12, 30)).days
+        except (ValueError, TypeError):
+            serial = date_str
+
+        values = [
+            i + 1,                         # A: 序号 (re-numbered)
+            serial,                        # B: 发生/发现日期
+            record['category'] or '',       # C: 异常类别
+            record['bizUnit'] or '',        # D: 事业部
+            record['company'] or '',        # E: 经营单位
+            record['importExport'] or '',   # F: 进出口
+            record['customsNo'] or '',      # G: 报关单号
+            record['bolNo'] or '',          # H: 提运单号
+            record['containerNo'] or '',    # I: 柜号
+            record['description'] or '',    # J: 异常描述
+            record['responsible'] or '',    # K: 责任方
+            record['fee'] or '',            # L: 异常费用
+            record['progress'] or '',       # M: 处理进度
+            record['status'] or '',         # N: 闭环情况
+            record['agent'] or '',          # O: 代理
+            ''                              # P: (empty, matches template)
+        ]
+
+        for col, val in enumerate(values, 1):
+            cell = ws_abnormal.cell(row=row_num, column=col, value=val)
+            style = abnormal_styles.get(col, {})
+            if 'font' in style:
+                cell.font = style['font']
+            if 'alignment' in style:
+                cell.alignment = style['alignment']
+            if 'number_format' in style:
+                cell.number_format = style['number_format']
+            if 'border' in style:
+                cell.border = style['border']
+
+    # ============================================================
+    # Remove 2025 sheets and Sheet3 (only keep 2026 sheets)
+    # ============================================================
+    for sheet_name in ['2025 日报关情况', '2025年异常跟踪表', 'Sheet3']:
+        if sheet_name in wb.sheetnames:
+            del wb[sheet_name]
+
+    # ============================================================
+    # Save to BytesIO and return as download
+    # ============================================================
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    # Generate filename based on requested date
+    target_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    try:
+        dt = datetime.strptime(target_date, '%Y-%m-%d')
+        filename = f'华东口岸申报日报关情况 {dt.month}.{dt.day}.xlsx'
+    except ValueError:
+        filename = '华东口岸申报日报关情况.xlsx'
+
+    response = app.response_class(
+        output.read(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={
+            'Content-Disposition': f"attachment; filename*=UTF-8''{quote(filename)}"
+        }
+    )
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
+@app.route('/api/export-text-report', methods=['GET'])
+def export_text_report():
+    """Export daily text report as DOCX file.
+
+    Sections:
+    1. Daily summary line (declared/released/review counts)
+    2. 【查验情况】— inspection records for the target date
+    3. 【异常情况】— all unresolved (未闭环) abnormal records
+    """
+    from io import BytesIO
+    from urllib.parse import quote
+
+    db = get_db()
+
+    # Parse target date
+    target_date = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    try:
+        dt = datetime.strptime(target_date, '%Y-%m-%d')
+    except ValueError:
+        return jsonify({'error': 'Invalid date format, expected YYYY-MM-DD'}), 400
+
+    month_day = f"{dt.month}月{dt.day}日"
+
+    # 1. Daily record
+    daily = db.execute(
+        "SELECT * FROM daily_records WHERE date = ? AND year = '2026'",
+        (target_date,)
+    ).fetchone()
+
+    total_declared = daily['totalDeclared'] if daily else 0
+    total_released = daily['totalReleased'] if daily else 0
+    review_completed = daily['reviewCompleted'] if daily else 0
+
+    # If reviewCompleted is a count from unclearedReason text, use it;
+    # otherwise fall back to: totalDeclared - totalReleased
+    if review_completed <= 0 and daily and daily['unclearedReason']:
+        import re
+        m = re.search(r'(\d+)票审结未放行', daily['unclearedReason'] or '')
+        if m:
+            review_completed = int(m.group(1))
+
+    # 2. Inspection records: today's 查验 + all ongoing 查验 (未闭环)
+    inspection_records = db.execute("""
+        SELECT * FROM abnormal_records
+        WHERE year = '2026' AND deleted = 0
+          AND category LIKE '%查验%'
+          AND (date = ? OR status = '未闭环')
+        ORDER BY date, seq
+    """, (target_date,)).fetchall()
+
+    # 3. All unresolved (未闭环) records, excluding those with 查验 category
+    abnormal_records = db.execute("""
+        SELECT * FROM abnormal_records
+        WHERE year = '2026' AND deleted = 0
+          AND status = '未闭环'
+          AND category NOT LIKE '%查验%'
+        ORDER BY date, seq
+    """).fetchall()
+
+    # ============================================================
+    # Build DOCX document
+    # ============================================================
+    try:
+        from docx import Document
+        from docx.shared import Pt, Cm, RGBColor
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.oxml.ns import qn
+    except ImportError:
+        return jsonify({'error': 'python-docx 未安装，请运行: pip3 install python-docx'}), 500
+
+    doc = Document()
+
+    # Set default font
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = '微软雅黑'
+    font.size = Pt(11)
+    style.element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+    # Narrow margins
+    for section in doc.sections:
+        section.top_margin = Cm(2)
+        section.bottom_margin = Cm(2)
+        section.left_margin = Cm(2.5)
+        section.right_margin = Cm(2.5)
+
+    # === Title line: "6月5日" ===
+    title = doc.add_paragraph()
+    title.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run = title.add_run(month_day)
+    run.font.size = Pt(14)
+    run.font.bold = True
+    run.font.name = '微软雅黑'
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+    # === Summary line ===
+    summary = doc.add_paragraph()
+    summary_text = f"华东地区出口通关申报放行单量合共{total_released}单。审结{review_completed}票"
+    run = summary.add_run(summary_text)
+    run.font.size = Pt(11)
+    run.font.name = '微软雅黑'
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+    note = doc.add_paragraph()
+    run = note.add_run("当天走船计划除如下查验日报提及的单外已全部申报放行")
+    run.font.size = Pt(11)
+    run.font.name = '微软雅黑'
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+    # === 【查验情况】 ===
+    doc.add_paragraph()  # blank line
+    section_title = doc.add_paragraph()
+    run = section_title.add_run("【查验情况】")
+    run.font.size = Pt(12)
+    run.font.bold = True
+    run.font.name = '微软雅黑'
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+    if inspection_records:
+        for idx, rec in enumerate(inspection_records, 1):
+            item_para = doc.add_paragraph()
+            item_para.paragraph_format.space_before = Pt(6)
+            item_para.paragraph_format.space_after = Pt(2)
+
+            lines = []
+            lines.append(f"{idx}.经营单位：{rec['company'] or ''}")
+            bol_part = f"/{rec['bolNo']}" if rec['bolNo'] else ""
+            lines.append(f"报关单号/提单号：{rec['customsNo'] or ''}{bol_part}")
+            lines.append(f"查验情况：{rec['description'] or ''}")
+            lines.append(f"查验处理进度：{rec['progress'] or ''}")
+
+            for line in lines:
+                p = doc.add_paragraph()
+                p.paragraph_format.space_before = Pt(0)
+                p.paragraph_format.space_after = Pt(0)
+                p.paragraph_format.line_spacing = Pt(18)
+                run = p.add_run(line)
+                run.font.size = Pt(11)
+                run.font.name = '微软雅黑'
+                run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+            # Add blank line between items
+            if idx < len(inspection_records):
+                doc.add_paragraph()
+    else:
+        p = doc.add_paragraph()
+        run = p.add_run("无")
+        run.font.size = Pt(11)
+        run.font.name = '微软雅黑'
+        run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+    # === 【异常情况】 ===
+    doc.add_paragraph()
+    section_title2 = doc.add_paragraph()
+    run = section_title2.add_run("【异常情况】")
+    run.font.size = Pt(12)
+    run.font.bold = True
+    run.font.name = '微软雅黑'
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+    if abnormal_records:
+        for idx, rec in enumerate(abnormal_records, 1):
+            lines = []
+            lines.append(f"{idx}.业务类型：{rec['responsible'] or ''}")
+            lines.append(f"经营单位：{rec['company'] or ''}")
+            bol_part = f"/{rec['bolNo']}" if rec['bolNo'] else ""
+            lines.append(f"报关单号/提单号：{rec['customsNo'] or ''}{bol_part}")
+            lines.append(f"原因：{rec['description'] or ''}")
+            lines.append(f"进度：{rec['progress'] or ''}")
+
+            for line in lines:
+                p = doc.add_paragraph()
+                p.paragraph_format.space_before = Pt(0)
+                p.paragraph_format.space_after = Pt(0)
+                p.paragraph_format.line_spacing = Pt(18)
+                run = p.add_run(line)
+                run.font.size = Pt(11)
+                run.font.name = '微软雅黑'
+                run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+            # Add blank line between items
+            if idx < len(abnormal_records):
+                doc.add_paragraph()
+    else:
+        p = doc.add_paragraph()
+        run = p.add_run("无")
+        run.font.size = Pt(11)
+        run.font.name = '微软雅黑'
+        run._element.rPr.rFonts.set(qn('w:eastAsia'), '微软雅黑')
+
+    # ============================================================
+    # Save and return
+    # ============================================================
+    output = BytesIO()
+    doc.save(output)
+    output.seek(0)
+
+    filename = f'华东口岸申报日报关情况(文字版) {dt.month}.{dt.day}.docx'
+
+    response = app.response_class(
+        output.read(),
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        headers={
+            'Content-Disposition': f"attachment; filename*=UTF-8''{quote(filename)}"
+        }
+    )
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 # ---------------- Dimension Item Editing ----------------
