@@ -236,14 +236,14 @@
   .detail-table .mono { font-family: var(--font-mono); font-size: 13px; }
 
   /* Filter */
-  .filter-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+  .filter-bar { display: flex; gap: 10px; margin-bottom: 18px; align-items: center; overflow-x: auto; }
   .filter-select, .filter-input {
-    padding: 9px 14px; font-size: 13px; border: 1px solid #d1d1d6; border-radius: 10px;
+    padding: 8px 12px; font-size: 13px; border: 1px solid #d1d1d6; border-radius: 10px;
     background: #fff; font-family: var(--font); color: var(--text);
-    transition: all 0.15s; outline: none;
+    transition: all 0.15s; outline: none; white-space: nowrap; flex-shrink: 0;
   }
   .filter-select:focus, .filter-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,113,227,0.12); }
-  .filter-input { width: 220px; }
+  .filter-input { width: 240px; }
   .filter-input::placeholder { color: #aeaeb2; }
 
   /* Table */
@@ -255,15 +255,16 @@
   .table-wrap { overflow-x: auto; max-height: 680px; overflow-y: auto; }
   .data-table { width: 100%; border-collapse: collapse; min-width: 1160px; table-layout: fixed; }
   .data-table th {
-    text-align: left; padding: 14px 16px; font-size: 11px; font-weight: 600;
-    color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;
-    border-bottom: 1px solid var(--separator); background: rgba(245,245,247,0.8);
+    text-align: left; padding: 8px 10px; font-size: 12px; font-weight: 600;
+    color: var(--text-secondary); letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--separator); background: #f9f9fb;
     position: sticky; top: 0; z-index: 2; cursor: pointer; user-select: none;
+    white-space: nowrap; height: 36px;
   }
   .data-table th:hover { color: var(--text); }
   .data-table th .sort-arrow { margin-left: 4px; font-size: 10px; opacity: 0.4; }
   .data-table th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
-  .data-table td { padding: 10px 12px; font-size: 12px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; white-space: nowrap; }
+  .data-table td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid #f0f0f2; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 38px; }
   .data-table td.wrap { white-space: normal; }
   .data-table tr:hover td { background: rgba(0,113,227,0.025); }
   .data-table tr.expanded td { background: rgba(0,113,227,0.04); }
