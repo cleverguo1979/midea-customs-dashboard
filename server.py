@@ -1041,10 +1041,12 @@ def export_report():
         "SELECT * FROM abnormal_records WHERE year = '2026' AND deleted = 0 ORDER BY seq"
     ).fetchall()
 
-    # Load the latest Excel template for styles
-    template_path = os.path.join(BASE_DIR, '华东口岸申报日报关情况 6.4.xlsx')
-    if not os.path.exists(template_path):
-        return jsonify({'error': '模板文件不存在: ' + template_path}), 500
+    # Find the latest Excel template for styles
+    import glob
+    candidates = glob.glob(os.path.join(BASE_DIR, '华东口岸申报日报关情况*.xlsx'))
+    if not candidates:
+        return jsonify({'error': '模板文件不存在，请上传华东口岸申报日报关情况.xlsx'}), 500
+    template_path = max(candidates, key=os.path.getmtime)
 
     wb = openpyxl.load_workbook(template_path)
 
