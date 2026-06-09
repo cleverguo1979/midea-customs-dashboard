@@ -935,7 +935,11 @@ async function init() {
 
 function hasAppData() {
   for (const y of ['2025', '2026']) {
-    if (appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0) return true;
+    if (appData[y]) {
+      const hasDaily = appData[y].dailyData && Array.isArray(appData[y].dailyData) && appData[y].dailyData.length > 0;
+      const hasAbnormal = appData[y].abnormalRecords && Array.isArray(appData[y].abnormalRecords) && appData[y].abnormalRecords.length > 0;
+      if (hasDaily || hasAbnormal) return true;
+    }
   }
   return false;
 }
@@ -949,10 +953,24 @@ async function fetchCloudData() {
     const cloud = await resp.json();
     let hasData = false;
     for (const year of ['2025', '2026']) {
-      if (cloud[year] && cloud[year].dailyData && Array.isArray(cloud[year].dailyData) && cloud[year].dailyData.length > 0) {
-        appData[year] = cloud[year];
-        hasData = true;
+      if (!cloud[year]) continue;
+      const cloudYear = cloud[year];
+      const hasCloudDaily = cloudYear.dailyData && Array.isArray(cloudYear.dailyData) && cloudYear.dailyData.length > 0;
+      const hasCloudAbnormal = cloudYear.abnormalRecords && Array.isArray(cloudYear.abnormalRecords) && cloudYear.abnormalRecords.length > 0;
+      if (!hasCloudDaily && !hasCloudAbnormal) continue;
+
+      // Merge: prefer cloud data, but keep local data for fields cloud doesn't have
+      if (!appData[year]) appData[year] = {};
+      if (hasCloudDaily) {
+        appData[year].dailyData = cloudYear.dailyData;
       }
+      if (hasCloudAbnormal) {
+        appData[year].abnormalRecords = cloudYear.abnormalRecords;
+      }
+      if (cloudYear.mapping) {
+        appData[year].mapping = cloudYear.mapping;
+      }
+      hasData = true;
     }
     if (hasData) {
       dataSource = 'cloud';
@@ -2005,7 +2023,9 @@ function parseWorkbook(wb) {
 // ==================== RENDER ALL ====================
 function renderAll() {
   const data = appData[currentYear];
-  const hasData = data && data.dailyData && data.dailyData.length > 0;
+  const hasDaily = data && data.dailyData && data.dailyData.length > 0;
+  const hasAbnormal = data && data.abnormalRecords && data.abnormalRecords.length > 0;
+  const hasData = hasDaily || hasAbnormal;
 
   updateStatusBar(hasData, data);
   updateNavbar(data);
@@ -2031,21 +2051,23 @@ function updateStatusBar(hasData, data) {
   const bar = document.getElementById('dataStatus');
 
   if (hasData) {
-    const latestDate = data.dailyData[data.dailyData.length - 1].date;
+    const dailyLen = (data && data.dailyData) ? data.dailyData.length : 0;
+    const latestDate = dailyLen > 0 ? data.dailyData[dailyLen - 1].date : (getLatestDate() || '—');
+    const abnormalLen = (data && data.abnormalRecords) ? data.abnormalRecords.length : 0;
     if (dataSource === 'local') {
       // WARNING: showing stale cached data from localStorage
       dot.className = 'dot empty';
       bar.style.background = 'rgba(255,149,0,0.12)';
       bar.style.border = '1px solid rgba(255,149,0,0.4)';
       text.innerHTML = `⚠️ <b>离线缓存数据</b> · 最新日期 ${latestDate} · <span style="color:#ff9500">服务器连接失败，数据可能已过期！</span>`;
-      extra.textContent = `请检查网络或点击刷新重试 · ${data.dailyData.length} 天记录`;
+      extra.textContent = `请检查网络或点击刷新重试 · ${dailyLen} 天记录`;
       refreshBtn.style.display = '';
     } else {
       dot.className = 'dot loaded';
       bar.style.background = 'rgba(52,199,89,0.08)';
       bar.style.border = '1px solid rgba(52,199,89,0.25)';
       text.textContent = `✅ 实时数据 · 最新日期 ${latestDate}`;
-      extra.textContent = `${data.dailyData.length} 天记录 | ${(data.abnormalRecords || []).length} 条异常`;
+      extra.textContent = `${dailyLen} 天记录 | ${abnormalLen} 条异常`;
       refreshBtn.style.display = 'none';
     }
     btn.style.display = '';
