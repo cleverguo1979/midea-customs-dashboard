@@ -1195,18 +1195,12 @@ function bindEvents() {
   document.getElementById('btnSettings').addEventListener('click', openSettings);
   document.getElementById('btnSettingsSave').addEventListener('click', saveSettings);
   document.getElementById('btnSettingsCancel').addEventListener('click', closeSettings);
-  document.getElementById('settingsModal').addEventListener('click', function(e) {
-    if (e.target === this) closeSettings();
-  });
-
+  // settingsModal — no click-outside-to-close to prevent accidental data loss
   // New operational buttons
   document.getElementById('btnAddRecord').addEventListener('click', openAddRecordModal);
   document.getElementById('btnAddCancel').addEventListener('click', closeAddRecordModal);
   document.getElementById('btnAddSubmit').addEventListener('click', submitAddRecord);
-  document.getElementById('addRecordModal').addEventListener('click', function(e) {
-    if (e.target === this) closeAddRecordModal();
-  });
-
+  // addRecordModal — no click-outside-to-close to prevent accidental loss of input data
   document.getElementById('btnEditCancel').addEventListener('click', closeEditModal);
   document.getElementById('btnEditSubmit').addEventListener('click', submitEditRecord);
   document.getElementById('btnEditDelete').addEventListener('click', deleteRecord);
@@ -1214,24 +1208,15 @@ function bindEvents() {
 
   // Record operation log modal
   document.getElementById('btnRecordOpLogClose').addEventListener('click', closeRecordOpLog);
-  document.getElementById('recordOpLogModal').addEventListener('click', function(e) {
-    if (e.target === this) closeRecordOpLog();
-  });
-
+  // recordOpLogModal — no click-outside-to-close
   document.getElementById('btnDailyRegister').addEventListener('click', openDailyRegisterModal);
   document.getElementById('btnDailyCancel').addEventListener('click', closeDailyRegisterModal);
   document.getElementById('btnDailySubmit').addEventListener('click', submitDailyRegister);
-  document.getElementById('dailyRegisterModal').addEventListener('click', function(e) {
-    if (e.target === this) closeDailyRegisterModal();
-  });
-
+  // dailyRegisterModal — no click-outside-to-close to prevent accidental loss of input data
   // Add uncleared item modal
   document.getElementById('btnAddUnclearedCancel').addEventListener('click', closeAddUnclearedModal);
   document.getElementById('btnAddUnclearedSubmit').addEventListener('click', submitAddUncleared);
-  document.getElementById('addUnclearedModal').addEventListener('click', function(e) {
-    if (e.target === this) closeAddUnclearedModal();
-  });
-
+  // addUnclearedModal — no click-outside-to-close to prevent accidental loss of input data
   // Batch operations
   document.getElementById('btnBatchClose').addEventListener('click', () => batchUpdateStatus('已闭环'));
   document.getElementById('btnBatchReopen').addEventListener('click', () => batchUpdateStatus('未闭环'));
@@ -1244,16 +1229,12 @@ function bindEvents() {
   document.getElementById('btnClear2Confirm').addEventListener('click', executeClear);
   document.getElementById('clearInput1').addEventListener('input', watchClearInput1);
   document.getElementById('clearInput2').addEventListener('input', watchClearInput2);
-  document.getElementById('clearModal1').addEventListener('click', function(e) { if (e.target === this) closeClearFlow(); });
-  document.getElementById('clearModal2').addEventListener('click', function(e) { if (e.target === this) closeClearFlow(); });
-
+  // clearModal1 — no click-outside-to-close (double-confirmation flow)
+  // clearModal2 — no click-outside-to-close (double-confirmation flow)
   // Operation log
   document.getElementById('btnOpLog').addEventListener('click', openOpLog);
   document.getElementById('btnOpLogClose').addEventListener('click', closeOpLog);
-  document.getElementById('opLogModal').addEventListener('click', function(e) {
-    if (e.target === this) closeOpLog();
-  });
-
+  // opLogModal — no click-outside-to-close
   // Operator name
   document.getElementById('operatorName').addEventListener('click', changeOperatorName);
 
@@ -3440,32 +3421,37 @@ function scheduleNextPoll() {
   }, POLLING_INTERVAL_MS);
 }
 
+// Compute a lightweight fingerprint of current data to detect any meaningful change
+function dataFingerprint() {
+  const parts = [];
+  for (const y of ['2025', '2026']) {
+    if (appData[y]) {
+      const dLen = (appData[y].dailyData && Array.isArray(appData[y].dailyData)) ? appData[y].dailyData.length : 0;
+      const aLen = (appData[y].abnormalRecords && Array.isArray(appData[y].abnormalRecords)) ? appData[y].abnormalRecords.length : 0;
+      // Count by status — catches status toggles even when count is unchanged
+      let closedCount = 0, openCount = 0;
+      if (appData[y].abnormalRecords && Array.isArray(appData[y].abnormalRecords)) {
+        for (const r of appData[y].abnormalRecords) {
+          if (r.status && r.status.includes('未闭环')) openCount++;
+          else closedCount++;
+        }
+      }
+      parts.push(y + ':' + dLen + '/' + aLen + '/c=' + closedCount + '/o=' + openCount);
+    }
+  }
+  return parts.join('|');
+}
+
 async function pollOnce() {
   try {
-    const prevCounts = {};
-    for (const y of ['2025', '2026']) {
-      if (appData[y] && appData[y].dailyData) {
-        prevCounts[y] = appData[y].dailyData.length;
-      } else {
-        prevCounts[y] = 0;
-      }
-    }
-
+    const prevFingerprint = dataFingerprint();
     const wasLocal = (dataSource === 'local');
     const cloudLoaded = await fetchCloudData();
 
     if (cloudLoaded) {
       dataSource = 'cloud';
-      // Check if data actually changed
-      let changed = false;
-      for (const y of ['2025', '2026']) {
-        const prevLen = prevCounts[y] || 0;
-        const newLen = (appData[y] && appData[y].dailyData) ? appData[y].dailyData.length : 0;
-        if (newLen !== prevLen) {
-          changed = true;
-          break;
-        }
-      }
+      const newFingerprint = dataFingerprint();
+      const changed = (prevFingerprint !== newFingerprint);
 
       if (changed || wasLocal) {
         if (changed) console.log('[看板] 轮询检测到数据更新，自动刷新看板');
