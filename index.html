@@ -869,7 +869,8 @@ const IS_DEV = window.location.protocol === 'file:' ||
                window.location.hostname === '127.0.0.1' ||
                window.location.hostname.startsWith('192.168.') ||
                window.location.hostname.startsWith('10.') ||
-               /^172\.(1[6-9]|2\d|3[01])\./.test(window.location.hostname);
+               /^172\.(1[6-9]|2\d|3[01])\./.test(window.location.hostname) ||
+               window.location.hostname.endsWith('.lhr.life');  // localhost.run tunnel
 const CUSTOM_DOMAIN = 'cleverguo.cn';
 const IS_CUSTOM_DOMAIN = window.location.hostname.endsWith('.' + CUSTOM_DOMAIN) || window.location.hostname === CUSTOM_DOMAIN;
 const API_SERVER = (IS_DEV || IS_CUSTOM_DOMAIN) ? window.location.origin : ('https://board.' + CUSTOM_DOMAIN);
@@ -3350,6 +3351,7 @@ async function pollOnce() {
       }
     }
 
+    const wasLocal = (dataSource === 'local');
     const cloudLoaded = await fetchCloudData();
 
     if (cloudLoaded) {
@@ -3365,10 +3367,15 @@ async function pollOnce() {
         }
       }
 
-      if (changed) {
-        console.log('[看板] 轮询检测到数据更新，自动刷新看板');
+      if (changed || wasLocal) {
+        if (changed) console.log('[看板] 轮询检测到数据更新，自动刷新看板');
+        else console.log('[看板] 云端连接恢复，更新状态栏');
         renderAll();
       }
+    } else if (wasLocal) {
+      // Cloud still unavailable, ensure status bar shows offline warning
+      updatePollingUI();
+      return;
     }
 
     updatePollingUI();
