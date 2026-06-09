@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-美的业务关务看板 - 后端 API 服务器
+美的项目客服看板 - 后端 API 服务器
 支持本地局域网访问和云部署（Render/Railway/Fly.io 等）
 
 v2: SQLite 持久化存储，支持实时登记、跟进、闭环管理
@@ -1880,6 +1880,6 @@ migrate_from_json()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8888))
-    print(f"🚀 美的关务看板 v2 启动在端口 {port}")
+    print(f"🚀 美的项目客服看板 v2 启动在端口 {port}")
     print(f"   数据库: {DB_FILE}")
     app.run(host='0.0.0.0', port=port, debug=False)
