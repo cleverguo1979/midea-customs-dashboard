@@ -855,7 +855,7 @@ let monthlyChart = null, bizUnitChart = null, categoryChart = null;
 let selectedDim = null;
 let abnormalRecords = [];
 let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
-let abnormalSort = { field: null, asc: true };
+let abnormalSort = { field: 'date', asc: false };
 let apiKey = '';
 let aiCache = null;
 let batchSelected = new Set();
@@ -1050,8 +1050,8 @@ async function exportTextReport() {
   btn.textContent = '⏳ 导出中...';
   btn.disabled = true;
   try {
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    const resp = await fetch(API_SERVER + '/api/export-text-report?date=' + encodeURIComponent(yesterday), {
+    const today = new Date().toISOString().split('T')[0];
+    const resp = await fetch(API_SERVER + '/api/export-text-report?date=' + encodeURIComponent(today), {
       method: 'GET'
     });
     if (!resp.ok) {
@@ -1766,7 +1766,7 @@ async function executeClear() {
       selectedDim = null;
       abnormalRecords = [];
       abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
-      abnormalSort = { field: null, asc: true };
+      abnormalSort = { field: 'date', asc: false };
       batchSelected.clear();
       document.getElementById('detailPanel').classList.remove('show');
       renderAll();
@@ -3286,7 +3286,7 @@ function switchYear(year) {
   batchSelected.clear();
   document.getElementById('detailPanel').classList.remove('show');
   abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
-  abnormalSort = { field: null, asc: true };
+  abnormalSort = { field: 'date', asc: false };
   renderAll();
 }
 
