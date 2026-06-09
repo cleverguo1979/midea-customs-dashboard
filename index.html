@@ -424,6 +424,23 @@
   .btn-form.danger { background: var(--red); color: #fff; }
   .btn-form.danger:hover { background: #e0352b; }
 
+  /* Uncleared bulk paste */
+  .uncleared-toggle { padding: 10px 24px; cursor: pointer; font-size: 13px; color: var(--text-secondary); border-top: 1px solid #f0f0f2; display: flex; align-items: center; gap: 6px; user-select: none; }
+  .uncleared-toggle:hover { color: var(--accent); }
+  .uncleared-toggle-icon { font-size: 10px; transition: transform 0.2s; display: inline-block; }
+  .uncleared-toggle-icon.open { transform: rotate(90deg); }
+  .uncleared-section { padding: 0 24px 16px; }
+  .uncleared-section textarea { width: 100%; padding: 12px; font-size: 12px; font-family: var(--font-mono); border: 1px solid #d1d1d6; border-radius: 10px; resize: vertical; min-height: 180px; line-height: 1.6; outline: none; }
+  .uncleared-section textarea:focus { border-color: var(--accent); }
+  .btn-parse-preview { margin-top: 8px; padding: 6px 16px; font-size: 12px; font-weight: 600; background: #e8e8ed; color: var(--text); border: none; border-radius: 8px; cursor: pointer; }
+  .btn-parse-preview:hover { background: #d1d1d6; }
+  .uncleared-preview { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .uncleared-preview .dim-preview { background: rgba(245,245,247,0.8); border-radius: 10px; padding: 10px 12px; font-size: 12px; }
+  .uncleared-preview .dim-preview .dim-preview-header { font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .uncleared-preview .dim-preview .dim-preview-count { font-weight: 600; font-size: 13px; }
+  .uncleared-preview .dim-preview .dim-preview-items { color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
+  .uncleared-preview .dim-preview .dim-preview-more { color: var(--accent); font-size: 11px; cursor: default; }
+
   /* Clear confirmation */
   .clear-warning { background: #fff5f5; border: 1px solid #fcc; border-radius: 12px; padding: 16px; margin-bottom: 16px; color: var(--red); font-size: 13px; line-height: 1.6; }
   .clear-warning strong { font-size: 14px; }
@@ -633,7 +650,7 @@
 
 <!-- Daily Registration Modal -->
 <div class="form-modal-overlay" id="dailyRegisterModal">
-  <div class="form-modal-box" style="width:480px">
+  <div class="form-modal-box" style="width:640px">
     <h3>📊 登记今日业务量</h3>
     <div class="form-desc">手动登记当日申报数据，如当日已有数据则会更新</div>
     <div class="form-body">
@@ -648,6 +665,16 @@
       </div>
       <div class="form-row single">
         <div class="form-group"><label>已放行单量 *</label><input type="number" id="dailyReleased" value="0" min="0" placeholder="当日实际已放行的单量"></div>
+      </div>
+      <!-- Collapsible uncleared detail section -->
+      <div class="uncleared-toggle" id="unclearedToggle" onclick="toggleUnclearedSection()">
+        <span class="uncleared-toggle-icon" id="unclearedToggleIcon">▶</span>
+        <span>📋 未放行明细（选填）— 从 Excel 批量粘贴，自动分到五个维度</span>
+      </div>
+      <div class="uncleared-section" id="unclearedSection" style="display:none">
+        <textarea id="unclearedPaste" placeholder="从 Excel 直接复制粘贴，格式示例：&#10;空运：&#10;T262706516 未过境&#10;T262706517 未进港&#10;驳船：&#10;B123456789 等驳船&#10;大船：&#10;公路：&#10;查验：&#10;T262706520 海关查验中" rows="10"></textarea>
+        <button class="btn-parse-preview" id="btnParsePreview" onclick="previewUnclearedPaste()">🔍 解析预览</button>
+        <div class="uncleared-preview" id="unclearedPreview"></div>
       </div>
     </div>
     <div class="form-actions">
@@ -1638,12 +1665,48 @@ async function deleteRecord() {
 }
 
 // ==================== DAILY REGISTRATION ====================
+function toggleUnclearedSection() {
+  const section = document.getElementById('unclearedSection');
+  const icon = document.getElementById('unclearedToggleIcon');
+  const isOpen = section.style.display !== 'none';
+  section.style.display = isOpen ? 'none' : 'block';
+  icon.classList.toggle('open', !isOpen);
+}
+
+function previewUnclearedPaste() {
+  const raw = document.getElementById('unclearedPaste').value.trim();
+  const preview = document.getElementById('unclearedPreview');
+  if (!raw) { preview.innerHTML = '<div style="color:var(--text-secondary);font-size:12px">请先粘贴未放行明细文本</div>'; return; }
+
+  const dims = parseUnclearedDimensions(raw);
+  const total = dims.reduce((s, d) => s + d.count, 0);
+  if (total === 0) {
+    preview.innerHTML = '<div style="color:#ff9500;font-size:12px">⚠️ 未识别到有效的维度条目，请检查格式（维度标题需用中文冒号，如「空运：」）</div>';
+    return;
+  }
+
+  preview.innerHTML = dims.map(d => {
+    const maxShow = 3;
+    const items = d.items || [];
+    const shown = items.slice(0, maxShow).map(it => escapeHtml(it.id + ' ' + it.reason)).join('<br>');
+    const more = items.length > maxShow ? `<div class="dim-preview-more">… 还有 ${items.length - maxShow} 条</div>` : '';
+    return `<div class="dim-preview" style="border-left:3px solid ${d.key==='查验'?'var(--red)':'var(--accent)'}">
+      <div class="dim-preview-header">${d.emoji} ${d.key} <span class="dim-preview-count">${d.count}条</span></div>
+      <div class="dim-preview-items">${shown || '<span style="color:#c7c7cc">（空）</span>'}</div>${more}
+    </div>`;
+  }).join('') + `<div style="grid-column:1/-1;font-size:12px;color:var(--accent);text-align:right">共 <b>${total}</b> 条未放行条目，保存后将自动写入</div>`;
+}
+
 function openDailyRegisterModal() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('dailyDate').value = today;
   document.getElementById('dailyDeclared').value = '';
   document.getElementById('dailyReleased').value = '';
   document.getElementById('dailyReview').value = '0';
+  document.getElementById('unclearedPaste').value = '';
+  document.getElementById('unclearedPreview').innerHTML = '';
+  document.getElementById('unclearedSection').style.display = 'none';
+  document.getElementById('unclearedToggleIcon').classList.remove('open');
   document.getElementById('dailyRegisterModal').classList.add('show');
 }
 
@@ -1668,7 +1731,7 @@ async function submitDailyRegister() {
         totalDeclared: declared,
         totalReleased: released,
         reviewCompleted: parseInt(document.getElementById('dailyReview').value) || 0,
-        unclearedReason: '',
+        unclearedReason: document.getElementById('unclearedPaste').value.trim(),
         _operator: operatorName
       })
     });
