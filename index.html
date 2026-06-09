@@ -883,6 +883,15 @@ function excelSerialToDate(serial) {
   return new Date((serial - 25569) * 86400000);
 }
 
+// Strip time portion from date string, keep only YYYY-MM-DD
+function fmtDate(d) {
+  if (!d) return '—';
+  const s = String(d).trim();
+  // If contains space or T, take the date part only
+  const idx = s.search(/[ T]/);
+  return idx > 0 ? s.substring(0, idx) : s.substring(0, 10);
+}
+
 // ==================== INIT ====================
 function loadTokens() {
   try {
@@ -1432,7 +1441,7 @@ function openEditModalById(recordId) {
   if (!record) { showToast('未找到该记录'); return; }
 
   document.getElementById('editRecordId').value = recordId;
-  document.getElementById('editRecordDesc').textContent = `${record.company || '—'} · ${record.bolNo || record.customsNo || '—'} · ${record.date || '—'}`;
+  document.getElementById('editRecordDesc').textContent = `${record.company || '—'} · ${record.bolNo || record.customsNo || '—'} · ${fmtDate(record.date)}`;
   document.getElementById('editCategory').value = record.category || '';
   document.getElementById('editStatus').value = (record.status && record.status.includes('未闭环')) ? '未闭环' : '已闭环';
   // Setup fuzzy company input and auto-fill bizUnit
@@ -3162,7 +3171,7 @@ function renderTableBody() {
         return `<tr id="abRow${i}">
           <td style="text-align:center"><input type="checkbox" class="row-checkbox row-cb" data-id="${escapeHtml(recordId)}" data-idx="${i}" ${checked}></td>
           <td>${r.seq||'—'}</td>
-          <td>${r.date||'—'}</td>
+          <td>${fmtDate(r.date)}</td>
           <td><span class="badge ${catBadgeClass}">${r.category||'—'}</span></td>
           <td>${r.bizUnit||'—'}</td>
           <td style="overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(r.company||'')}">${r.company||'—'}</td>
@@ -3182,7 +3191,7 @@ function renderTableBody() {
         </tr>
         <tr id="abDetail${i}" style="display:none">
           <td colspan="13"><div class="expand-detail" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 24px;font-size:13px;line-height:1.8">
-            <div><strong>日期：</strong>${escapeHtml(r.date||'—')}</div>
+            <div><strong>日期：</strong>${escapeHtml(fmtDate(r.date))}</div>
             <div><strong>类别：</strong>${escapeHtml(r.category||'—')}</div>
             <div><strong>状态：</strong>${(r.status||'').includes('未闭环') ? '🔴 未闭环' : '🟢 已闭环'}</div>
             <div><strong>事业部：</strong>${escapeHtml(r.bizUnit||'—')}</div>
