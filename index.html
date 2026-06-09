@@ -986,10 +986,16 @@ async function fetchCloudData() {
       const hasCloudAbnormal = cloudYear.abnormalRecords && Array.isArray(cloudYear.abnormalRecords) && cloudYear.abnormalRecords.length > 0;
       if (!hasCloudDaily && !hasCloudAbnormal) continue;
 
-      // Merge: prefer cloud data, but keep local data for fields cloud doesn't have
+      // Merge: cloud wins for same-key records, local preserved for rest
       if (!appData[year]) appData[year] = {};
       if (hasCloudDaily) {
-        appData[year].dailyData = cloudYear.dailyData;
+        // Merge dailyData by date — cloud overwrites matching dates, local keeps unique dates
+        const dailyMap = new Map();
+        if (appData[year].dailyData && Array.isArray(appData[year].dailyData)) {
+          appData[year].dailyData.forEach(d => { if (d.date) dailyMap.set(d.date, d); });
+        }
+        cloudYear.dailyData.forEach(d => { if (d.date) dailyMap.set(d.date, d); });
+        appData[year].dailyData = Array.from(dailyMap.values()).sort((a, b) => (a.date||'').localeCompare(b.date||''));
       }
       if (hasCloudAbnormal) {
         appData[year].abnormalRecords = cloudYear.abnormalRecords;
