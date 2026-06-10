@@ -288,9 +288,13 @@
   .summary-dot { width: 8px; height: 8px; border-radius: 50%; }
   .summary-num { font-weight: 700; font-family: var(--font-mono); }
 
-  /* Risk Pill */
-  .risk-pill { transition: all 0.2s; }
-  .risk-pill:hover { filter: brightness(0.95); }
+  /* Risk Pill — same style as section-badge */
+  .risk-pill {
+    font-size: 13px; font-weight: 500; padding: 4px 12px; border-radius: 20px;
+    cursor: pointer; transition: all 0.2s; letter-spacing: -0.2px;
+    vertical-align: middle;
+  }
+  .risk-pill:hover { opacity: 0.8; }
 
   /* Footer */
   .footer { text-align: center; padding: 20px; font-size: 12px; color: #aeaeb2; border-top: 1px solid var(--separator); margin-top: 40px; }
@@ -792,13 +796,13 @@
 
 <!-- Risk Detail Modal -->
 <div class="modal-overlay" id="riskModal">
-  <div class="modal-box" style="max-width:480px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <h3 style="margin:0;font-size:16px">⚠️ 重复报关单风险</h3>
-      <button onclick="closeRiskModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:0;line-height:1">✕</button>
+  <div class="modal-box" style="max-width:440px">
+    <h3>⚠️ 重复报关单风险</h3>
+    <div class="modal-desc">以下报关单号存在多条异常记录，建议重点关注</div>
+    <div class="modal-body" id="riskModalBody" style="max-height:320px;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button class="btn-sm ghost" onclick="closeRiskModal()">关闭</button>
     </div>
-    <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">以下报关单号在异常跟踪表中出现 2 次及以上，可能存在一票多风险，建议重点关注：</div>
-    <div style="max-height:360px;overflow-y:auto" id="riskModalBody"></div>
   </div>
 </div>
 
@@ -852,7 +856,7 @@
   <div class="section-header">
     <span class="section-title">📋 异常跟踪表</span>
     <span class="section-badge" id="abnormalCount">共 0 条</span>
-    <span class="risk-pill" id="riskPill" style="display:none;cursor:pointer;margin-left:6px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#f0f0f5;color:#8e8e93">⚡ 风险 0</span>
+    <span class="risk-pill" id="riskPill" style="background:#e8e8ed;color:var(--text-secondary)">无风险</span>
   </div>
   <div class="table-card">
     <div class="summary-bar" id="summaryBar"></div>
@@ -1275,9 +1279,6 @@ function bindEvents() {
 
   // Risk modal
   document.getElementById('riskPill').addEventListener('click', openRiskModal);
-  document.getElementById('riskModal').addEventListener('click', function(e) {
-    if (e.target === this) closeRiskModal();
-  });
   // dailyRegisterModal — no click-outside-to-close to prevent accidental loss of input data
   // Add uncleared item modal
   document.getElementById('btnAddUnclearedCancel').addEventListener('click', closeAddUnclearedModal);
@@ -1310,22 +1311,21 @@ function bindEvents() {
 }
 
 function openRiskModal() {
-  const pill = document.getElementById('riskPill');
-  const data = pill._data;
+  const data = document.getElementById('riskPill')._data;
   if (!data) return;
   const { dupCustoms, customsNoSeqs } = data;
   document.getElementById('riskModalBody').innerHTML = `
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="border-bottom:1px solid #e5e5ea;color:var(--text-secondary);font-size:11px;text-align:left">
-        <th style="padding:6px 8px">报关单号</th>
-        <th style="padding:6px 8px;text-align:center">次数</th>
-        <th style="padding:6px 8px">涉及序号</th>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;font-family:var(--font)">
+      <thead><tr style="color:var(--text-secondary);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px">
+        <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--separator)">报关单号</th>
+        <th style="text-align:center;padding:6px 0;border-bottom:1px solid var(--separator)">次数</th>
+        <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--separator)">涉及序号</th>
       </tr></thead>
       <tbody>${dupCustoms.map(([cno,c]) => `
-        <tr style="border-bottom:1px solid #f0f0f5">
-          <td style="padding:8px;font-family:var(--font-mono);font-size:13px">${escapeHtml(cno)}</td>
-          <td style="padding:8px;text-align:center;font-weight:700;color:#c0392b">${c}</td>
-          <td style="padding:8px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary)">${customsNoSeqs[cno].join(', ')}</td>
+        <tr style="border-bottom:1px solid #f5f5f7">
+          <td style="padding:8px 0;font-family:var(--font-mono);font-size:13px;font-weight:500">${escapeHtml(cno)}</td>
+          <td style="text-align:center;padding:8px 0"><span style="display:inline-block;background:rgba(255,59,48,0.1);color:var(--red);border-radius:10px;padding:1px 8px;font-size:12px;font-weight:600">${c}</span></td>
+          <td style="padding:8px 0;font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${customsNoSeqs[cno].join(', ')}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -1334,6 +1334,13 @@ function openRiskModal() {
 function closeRiskModal() {
   document.getElementById('riskModal').classList.remove('show');
 }
+// Click outside risk modal to close
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('riskModal');
+  if (modal.classList.contains('show') && e.target === modal) {
+    closeRiskModal();
+  }
+});
 
 function openSettings() {
   document.getElementById('apiKeyInput').value = apiKey;
@@ -3356,18 +3363,14 @@ function renderAbnormalTable(data) {
   const riskPill = document.getElementById('riskPill');
   const riskTotal = dupCustoms.reduce((s,[,c]) => s + c, 0);
   if (dupCustoms.length > 0) {
-    riskPill.style.display = '';
-    riskPill.style.background = 'rgba(255,59,48,0.12)';
-    riskPill.style.color = '#c0392b';
-    riskPill.innerHTML = `⚠️ 风险 ${dupCustoms.length} 项 · ${riskTotal} 条`;
-    riskPill.title = '点击查看重复报关单明细';
+    riskPill.style.background = 'rgba(255,59,48,0.1)';
+    riskPill.style.color = 'var(--red)';
+    riskPill.innerHTML = `⚠️ 风险 ${dupCustoms.length} 项`;
     riskPill._data = { dupCustoms, customsNoSeqs };
   } else {
-    riskPill.style.display = '';
-    riskPill.style.background = '#f0f0f5';
-    riskPill.style.color = '#8e8e93';
-    riskPill.innerHTML = '⚡ 无风险';
-    riskPill.title = '暂无重复报关单';
+    riskPill.style.background = '#e8e8ed';
+    riskPill.style.color = 'var(--text-secondary)';
+    riskPill.innerHTML = '无风险';
     riskPill._data = null;
   }
 
