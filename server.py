@@ -1298,8 +1298,17 @@ def export_report():
     ws_abnormal.conditional_formatting = cf_to_keep
 
     # Remove auto-filters from both sheets (exported file should show all data)
+    # Clear ref AND filterColumn to ensure no filtering state persists
     ws_daily.auto_filter.ref = None
+    ws_daily.auto_filter.filterColumn = ()
     ws_abnormal.auto_filter.ref = None
+    ws_abnormal.auto_filter.filterColumn = ()
+
+    # Also scrub autoFilter XML element if it lingers
+    for ws in (ws_daily, ws_abnormal):
+        ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+        for af in ws._ws.findall(f'{{{ns}}}autoFilter'):
+            ws._ws.remove(af)
 
     # ============================================================
     # Remove 2025 sheets and Sheet3 (only keep 2026 sheets)
