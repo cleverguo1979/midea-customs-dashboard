@@ -288,6 +288,19 @@
   .summary-dot { width: 8px; height: 8px; border-radius: 50%; }
   .summary-num { font-weight: 700; font-family: var(--font-mono); }
 
+  /* Risk Alert */
+  .risk-alert { margin: 0 28px 0 28px; border: 1px solid rgba(255,59,48,0.35); border-radius: 10px; background: rgba(255,59,48,0.06); overflow: hidden; }
+  .risk-alert-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; font-size: 13px; font-weight: 600; color: #c0392b; user-select: none; }
+  .risk-alert-header:hover { background: rgba(255,59,48,0.1); }
+  .risk-alert-arrow { font-size: 11px; transition: transform 0.2s; }
+  .risk-alert-arrow.open { transform: rotate(90deg); }
+  .risk-alert-body { padding: 0 16px 12px; border-top: 1px solid rgba(255,59,48,0.15); }
+  .risk-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .risk-table th { text-align: left; padding: 4px 8px; border-bottom: 1px solid #e5e5ea; color: var(--text-secondary); font-weight: 500; }
+  .risk-table td { padding: 4px 8px; border-bottom: 1px solid #f0f0f5; }
+  .risk-table .mono { font-family: var(--font-mono); font-size: 12px; }
+  .risk-badge { display: inline-block; background: #ff3b30; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700; margin-left: 4px; }
+
   /* Footer */
   .footer { text-align: center; padding: 20px; font-size: 12px; color: #aeaeb2; border-top: 1px solid var(--separator); margin-top: 40px; }
 
@@ -839,6 +852,13 @@
   </div>
   <div class="table-card">
     <div class="summary-bar" id="summaryBar"></div>
+    <div class="risk-alert" id="riskAlert" style="display:none">
+      <div class="risk-alert-header" id="riskAlertHeader" onclick="toggleRiskAlert()" style="cursor:pointer">
+        <span id="riskAlertTitle"></span>
+        <span class="risk-alert-arrow" id="riskAlertArrow">▶</span>
+      </div>
+      <div class="risk-alert-body" id="riskAlertBody" style="display:none"></div>
+    </div>
     <div class="batch-bar hidden" id="batchBar">
       <span>已选择 <span class="batch-count" id="batchCount">0</span> 条</span>
       <button class="btn-batch close" id="btnBatchClose">✅ 批量标记已闭环</button>
@@ -1255,6 +1275,14 @@ function bindEvents() {
   document.getElementById('btnDailySubmit').addEventListener('click', submitDailyRegister);
   document.getElementById('btnConfirmSave').addEventListener('click', confirmRegisterSave);
   document.getElementById('btnConfirmBack').addEventListener('click', confirmRegisterBack);
+
+function toggleRiskAlert() {
+  const body = document.getElementById('riskAlertBody');
+  const arrow = document.getElementById('riskAlertArrow');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  arrow.classList.toggle('open', !isOpen);
+}
   // dailyRegisterModal — no click-outside-to-close to prevent accidental loss of input data
   // Add uncleared item modal
   document.getElementById('btnAddUnclearedCancel').addEventListener('click', closeAddUnclearedModal);
@@ -3292,20 +3320,37 @@ function renderAbnormalTable(data) {
 
   // Duplicate customsNo risk detection
   const customsNoCount = {};
+  const customsNoSeqs = {};  // track seq numbers for each customsNo
   records.forEach(r => {
     const cno = (r.customsNo || '').trim();
     if (cno && cno !== '未申报' && cno !== '—') {
       customsNoCount[cno] = (customsNoCount[cno] || 0) + 1;
+      if (!customsNoSeqs[cno]) customsNoSeqs[cno] = [];
+      customsNoSeqs[cno].push(r.seq);
     }
   });
   const dupCustoms = Object.entries(customsNoCount).filter(([,c]) => c >= 2).sort((a,b) => b[1] - a[1]);
-  const riskHTML = dupCustoms.length > 0 ? `
-    <div class="summary-item" style="background:rgba(255,59,48,0.1);border:1px solid rgba(255,59,48,0.3);border-radius:6px;padding:2px 10px" title="同一报关单号存在多条异常记录">
-      ⚠️ <b>重复报关单风险</b>：${dupCustoms.map(([cno,c]) => `<span style="font-family:monospace;font-size:12px">${cno}</span>×${c}</span>`).join(' ')}
-    </div>` : '';
+
+  // Risk alert panel
+  if (dupCustoms.length > 0) {
+    document.getElementById('riskAlert').style.display = 'block';
+    document.getElementById('riskAlertTitle').innerHTML = `⚠️ 风险提示：<b>${dupCustoms.length}</b> 个报关单号存在多条异常 <span class="risk-badge">${dupCustoms.reduce((s,[,c])=>s+c,0)}</span>`;
+    document.getElementById('riskAlertBody').innerHTML = `
+      <table class="risk-table">
+        <thead><tr><th>报关单号</th><th>异常数</th><th>序号</th></tr></thead>
+        <tbody>${dupCustoms.map(([cno,c]) => `
+          <tr>
+            <td class="mono">${escapeHtml(cno)}</td>
+            <td><b>${c}</b></td>
+            <td class="mono" style="font-size:11px;color:var(--text-secondary)">${customsNoSeqs[cno].join(', ')}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } else {
+    document.getElementById('riskAlert').style.display = 'none';
+  }
 
   document.getElementById('summaryBar').innerHTML = `
-    ${riskHTML}
     <div class="summary-item"><span class="summary-dot" style="background:var(--green)"></span>已闭环 <span class="summary-num">${closedCount}</span></div>
     <div class="summary-item"><span class="summary-dot" style="background:var(--red)"></span>未闭环 <span class="summary-num">${openCount}</span></div>
     <div class="summary-item" style="color:var(--text-secondary)">|</div>
