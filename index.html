@@ -1820,6 +1820,14 @@ async function submitDailyRegister() {
 
 async function doSubmitDailyRegister(date, declared, released, reviewCompleted, unclearedReason) {
   try {
+    const body = JSON.stringify({
+      date,
+      totalDeclared: declared,
+      totalReleased: released,
+      reviewCompleted: reviewCompleted,
+      unclearedReason: unclearedReason,
+      _operator: operatorName
+    });
     const res = await fetch(API_SERVER + '/api/daily-records', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

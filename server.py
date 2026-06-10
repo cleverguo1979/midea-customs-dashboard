@@ -1856,7 +1856,8 @@ def _parse_uncleared_sections(reason_str):
             continue
         is_header = False
         for dk in dim_keys:
-            if stripped.startswith(dk + '：') or stripped.startswith(dk + ':'):
+            # Match "空运：", "空运:", or just "空运" (bare name, like frontend supports)
+            if stripped.startswith(dk + '：') or stripped.startswith(dk + ':') or stripped == dk or stripped == dk:
                 current_dim = dk
                 is_header = True
                 break
@@ -1930,7 +1931,7 @@ def _merge_uncleared_reason(existing_str, new_str):
         # Check if this is a dimension header
         current_dim = None
         for dk in dim_keys:
-            if stripped.startswith(dk + '：') or stripped.startswith(dk + ':'):
+            if stripped.startswith(dk + '：') or stripped.startswith(dk + ':') or stripped == dk:
                 current_dim = dk
                 break
         if current_dim and current_dim in to_append:
@@ -1982,7 +1983,7 @@ def remove_item_from_reason(reason_str, dimension, item_text):
         stripped = line.strip()
         is_header = False
         for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
-            if stripped.startswith(dim_name + '：') or stripped.startswith(dim_name + ':'):
+            if stripped.startswith(dim_name + '：') or stripped.startswith(dim_name + ':') or stripped == dim_name:
                 is_header = True
                 dim_header_indices.append((len(result), dim_name))
                 break
@@ -2006,7 +2007,7 @@ def remove_item_from_reason(reason_str, dimension, item_text):
         # Check if this is a dimension header
         is_header = False
         for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
-            if stripped.startswith(dim_name + '：') or stripped.startswith(dim_name + ':'):
+            if stripped.startswith(dim_name + '：') or stripped.startswith(dim_name + ':') or stripped == dim_name:
                 is_header = True
                 break
         if is_header:
@@ -2054,7 +2055,7 @@ def add_item_to_reason(reason_str, dimension, item_id, reason):
     dim_idx = -1
     for i, line in enumerate(lines):
         stripped = line.strip()
-        if stripped.startswith(dimension + '：') or stripped.startswith(dimension + ':'):
+        if stripped.startswith(dimension + '：') or stripped.startswith(dimension + ':') or stripped == dimension:
             dim_idx = i
             break
 
@@ -2064,7 +2065,7 @@ def add_item_to_reason(reason_str, dimension, item_id, reason):
         for i in range(dim_idx + 1, len(lines)):
             stripped = lines[i].strip()
             for dk in dim_keys:
-                if stripped.startswith(dk + '：') or stripped.startswith(dk + ':'):
+                if stripped.startswith(dk + '：') or stripped.startswith(dk + ':') or stripped == dk:
                     insert_idx = i
                     break
             if insert_idx < len(lines):
