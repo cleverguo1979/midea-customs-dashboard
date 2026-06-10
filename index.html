@@ -919,7 +919,7 @@ let currentYear = '2026';
 let monthlyChart = null, bizUnitChart = null, categoryChart = null;
 let selectedDim = null;
 let abnormalRecords = [];
-let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '' };
+let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
 let abnormalSort = { field: 'date', asc: false };
 let apiKey = '';
 let aiCache = null;
@@ -2031,7 +2031,7 @@ async function executeClear() {
       currentYear = '2026';
       selectedDim = null;
       abnormalRecords = [];
-      abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '' };
+      abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
       abnormalSort = { field: 'date', asc: false };
       batchSelected.clear();
       document.getElementById('detailPanel').classList.remove('show');
@@ -3656,7 +3656,7 @@ function switchYear(year) {
   selectedDim = null;
   batchSelected.clear();
   document.getElementById('detailPanel').classList.remove('show');
-  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '' };
+  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
   abnormalSort = { field: 'date', asc: false };
   renderAll();
 }
