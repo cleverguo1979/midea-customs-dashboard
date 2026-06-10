@@ -886,7 +886,7 @@ let abnormalSort = { field: 'date', asc: false };
 let apiKey = '';
 let aiCache = null;
 let batchSelected = new Set();
-let operatorName = '匿名';
+let operatorName = 'Anonymous';
 
 // Unified status helper: both '未闭环' and '未关闭' are considered unresolved
 function isUnclosed(status) {
@@ -1289,25 +1289,45 @@ function saveSettings() {
 }
 
 // ==================== OPERATOR NAME ====================
+// Map Chinese operator names to English to avoid HTTP header Latin-1 encoding issues
+const OPERATOR_NAME_MAP = {
+  '匿名': 'Anonymous',
+  '管理员': 'Admin',
+  '海关': 'Customs',
+  '代理': 'Agent',
+  '美的': 'Midea',
+  '财务': 'Finance',
+};
+function safeOperatorName(name) {
+  // Convert known Chinese names; otherwise return as-is (user should use English)
+  return OPERATOR_NAME_MAP[name] || name;
+}
+
 function loadOperatorName() {
   try {
     operatorName = localStorage.getItem('midea_operator_name') || '';
+    // Migrate: if stored name is Chinese and has a mapping, auto-convert
+    if (operatorName && OPERATOR_NAME_MAP[operatorName]) {
+      operatorName = OPERATOR_NAME_MAP[operatorName];
+      try { localStorage.setItem('midea_operator_name', operatorName); } catch(e) {}
+    }
   } catch(e) { operatorName = ''; }
   if (!operatorName) {
-    operatorName = prompt('👤 请输入您的姓名（用于操作记录追溯）：', '') || '匿名';
+    operatorName = prompt('Please enter your name (for audit log):', '') || 'Anonymous';
     if (operatorName) {
+      operatorName = safeOperatorName(operatorName);
       try { localStorage.setItem('midea_operator_name', operatorName); } catch(e) {}
     } else {
-      operatorName = '匿名';
+      operatorName = 'Anonymous';
     }
   }
   document.getElementById('operatorName').textContent = '👤 ' + operatorName;
 }
 
 function changeOperatorName() {
-  const name = prompt('请输入您的姓名（用于操作日志记录）：', operatorName);
+  const name = prompt('Please enter your name (for audit log):', operatorName);
   if (name !== null && name.trim()) {
-    operatorName = name.trim();
+    operatorName = safeOperatorName(name.trim());
     try { localStorage.setItem('midea_operator_name', operatorName); } catch(e) {}
     document.getElementById('operatorName').textContent = '👤 ' + operatorName;
     showToast('操作人已设为：' + operatorName);
