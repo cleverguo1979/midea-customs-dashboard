@@ -456,7 +456,6 @@ def get_current_data():
         abnormal_rows = db.execute(
             "SELECT * FROM abnormal_records WHERE year = ? AND deleted = 0"
             " AND (date != '' AND date IS NOT NULL)"
-            " AND (company != '' AND company IS NOT NULL)"
             " ORDER BY seq", (year,)
         ).fetchall()
 
