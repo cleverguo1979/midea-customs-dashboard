@@ -6,6 +6,9 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>美的项目客服看板</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -658,13 +661,13 @@
         <div class="form-group"><label>日期 *</label><input type="date" id="dailyDate"></div>
       </div>
       <div class="form-row single">
-        <div class="form-group"><label>应申报总单量 *</label><input type="number" id="dailyDeclared" value="0" min="0" placeholder="当日应申报的总单量"></div>
+        <div class="form-group"><label>应申报总单量</label><input type="number" id="dailyDeclared" value="0" min="0" placeholder="当日应申报的总单量"></div>
       </div>
       <div class="form-row single">
         <div class="form-group"><label>审结未放行数</label><input type="number" id="dailyReview" value="0" min="0" placeholder="海关已审结但尚未放行的单量"></div>
       </div>
       <div class="form-row single">
-        <div class="form-group"><label>已放行单量 *</label><input type="number" id="dailyReleased" value="0" min="0" placeholder="当日实际已放行的单量"></div>
+        <div class="form-group"><label>已放行单量</label><input type="number" id="dailyReleased" value="0" min="0" placeholder="当日实际已放行的单量"></div>
       </div>
       <!-- Collapsible uncleared detail section -->
       <div class="uncleared-toggle" id="unclearedToggle" onclick="toggleUnclearedSection()">
@@ -799,6 +802,9 @@
   <div class="section-header">
     <span class="section-title">⚠️ 未放行异常跟进</span>
     <span class="section-badge" id="unclearedDate">—</span>
+    <select id="dimensionDateFilter" onchange="onDimensionDateFilterChange()" style="margin-left:8px;padding:4px 8px;font-size:12px;border:1px solid #d1d1d6;border-radius:6px;background:#fff;color:var(--text);cursor:pointer;max-width:130px">
+      <option value="all">📅 全量</option>
+    </select>
     <button style="margin-left:auto;padding:6px 14px;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer" onclick="openAddUnclearedModal()">＋ 新增未放行</button>
   </div>
   <div class="dimension-row" id="dimensionRow"></div>
@@ -1728,7 +1734,7 @@ function previewUnclearedPaste() {
   }).join('') + `<div style="grid-column:1/-1;font-size:12px;color:var(--accent);text-align:right">共 <b>${total}</b> 条未放行条目，保存后将自动写入</div>`;
 }
 
-function openDailyRegisterModal() {
+async function openDailyRegisterModal() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('dailyDate').value = today;
   document.getElementById('dailyDeclared').value = '';
@@ -1739,6 +1745,21 @@ function openDailyRegisterModal() {
   document.getElementById('unclearedSection').style.display = 'none';
   document.getElementById('unclearedToggleIcon').classList.remove('open');
   document.getElementById('dailyRegisterModal').classList.add('show');
+
+  // Pre-fill from existing record for this date (if any)
+  try {
+    const resp = await fetch(API_SERVER + '/api/daily-records/by-date/' + encodeURIComponent(today));
+    if (resp.ok) {
+      const result = await resp.json();
+      if (result.found && result.record) {
+        const r = result.record;
+        if (r.totalDeclared > 0) document.getElementById('dailyDeclared').value = r.totalDeclared;
+        if (r.totalReleased > 0) document.getElementById('dailyReleased').value = r.totalReleased;
+        if (r.reviewCompleted > 0) document.getElementById('dailyReview').value = r.reviewCompleted;
+        if (r.unclearedReason) document.getElementById('unclearedPaste').value = r.unclearedReason;
+      }
+    }
+  } catch(e) { /* ignore, use defaults */ }
 }
 
 function closeDailyRegisterModal() {
@@ -1749,8 +1770,8 @@ async function submitDailyRegister() {
   const date = document.getElementById('dailyDate').value;
   const declared = parseInt(document.getElementById('dailyDeclared').value) || 0;
   const released = parseInt(document.getElementById('dailyReleased').value) || 0;
-  if (!date || (declared === 0 && released === 0)) {
-    showToast('请填写日期和至少一项业务量数据');
+  if (!date) {
+    showToast('请填写日期');
     return;
   }
   try {
@@ -2239,8 +2260,6 @@ function renderKPIs(data) {
   // Aggregate uncleared items across ALL records, not just the latest day
   let unclearedCount = 0;
   for (const record of dailies) {
-    const rc = record.reviewCompleted || 0;
-    if (rc <= 0) continue;
     const reason = (record.unclearedReason || '').trim();
     if (!reason || reason === '无') continue;
     unclearedCount += parseUnclearedDimensions(reason).reduce((s, dim) => s + dim.count, 0);
@@ -2862,10 +2881,8 @@ function aggregateUnclearedDimensions(data) {
 
   if (!data || !data.dailyData) return result;
 
-  // Collect from all records where reviewCompleted > 0
+  // Collect from all records that have uncleared items
   for (const record of data.dailyData) {
-    const rc = record.reviewCompleted || 0;
-    if (rc <= 0) continue;
     const reason = (record.unclearedReason || '').trim();
     if (!reason || reason === '无') continue;
 
@@ -2894,6 +2911,7 @@ function aggregateUnclearedDimensions(data) {
 }
 
 let aggregatedDimensions = [];
+let dimensionDateFilter = 'all';  // 'all' or a specific date string
 
 function renderDimensionCards(data) {
   const hasData = data && data.dailyData && data.dailyData.length > 0;
@@ -2921,18 +2939,55 @@ function renderDimensionCards(data) {
   }
 
   aggregatedDimensions = aggregateUnclearedDimensions(data);
-  // Count how many days have reviewCompleted > 0
-  const daysWithUncleared = data.dailyData.filter(d => (d.reviewCompleted || 0) > 0).length;
-  document.getElementById('unclearedDate').textContent = `累计 ${daysWithUncleared} 天有未放行`;
+  // Count days + date range for header badge (from aggregated data)
+  const unclearedDatesSet = new Set();
+  for (const dim of aggregatedDimensions) {
+    for (const item of dim.items) {
+      if (item.sourceDate) unclearedDatesSet.add(item.sourceDate);
+    }
+  }
+  const unclearedDates = Array.from(unclearedDatesSet).sort();
+  const daysWithUncleared = unclearedDates.length;
+  if (daysWithUncleared > 0) {
+    const firstDate = unclearedDates[0];
+    const lastDate = unclearedDates[unclearedDates.length - 1];
+    const rangeText = firstDate === lastDate
+      ? firstDate
+      : `${firstDate} ~ ${lastDate}`;
+    document.getElementById('unclearedDate').textContent = `累计 ${daysWithUncleared} 天 · ${rangeText}`;
+  } else {
+    document.getElementById('unclearedDate').textContent = '—';
+  }
 
-  document.getElementById('dimensionRow').innerHTML = aggregatedDimensions.map((dim, idx) => `
+  // Populate date filter dropdown
+  const filterSelect = document.getElementById('dimensionDateFilter');
+  const prevFilter = filterSelect.value;
+  filterSelect.innerHTML = '<option value="all">📅 全量</option>';
+  for (const d of unclearedDates.reverse()) {
+    const sel = (d === prevFilter) ? ' selected' : '';
+    filterSelect.innerHTML += `<option value="${d}"${sel}>📅 ${d}</option>`;
+  }
+  // Restore filter if still valid
+  if (unclearedDates.includes(dimensionDateFilter)) {
+    filterSelect.value = dimensionDateFilter;
+  } else {
+    dimensionDateFilter = 'all';
+    filterSelect.value = 'all';
+  }
+
+  // Render cards with filtered counts
+  document.getElementById('dimensionRow').innerHTML = aggregatedDimensions.map((dim, idx) => {
+    const filteredCount = dimensionDateFilter === 'all'
+      ? dim.count
+      : dim.items.filter(it => it.sourceDate === dimensionDateFilter).length;
+    return `
     <div class="dim-card${selectedDim === idx ? ' selected' : ''}" data-dim-idx="${idx}" onclick="selectDimension(${idx})">
       <div class="dim-icon ${dim.key === '空运' ? 'air' : dim.key === '驳船' ? 'barge' : dim.key === '大船' ? 'ship' : dim.key === '公路' ? 'road' : 'inspect'}">${icons[dim.key === '空运' ? 'air' : dim.key === '驳船' ? 'barge' : dim.key === '大船' ? 'ship' : dim.key === '公路' ? 'road' : 'inspect']}</div>
       <div class="dim-name">${dim.key}</div>
-      <div class="dim-count" style="color:${dim.count > 0 ? (dim.key==='查验'?'var(--red)':'var(--text)') : 'var(--text-secondary)'}">${dim.count}</div>
-      <div class="dim-desc">${dim.count > 0 ? '点击查看明细' : '无异常'}</div>
-    </div>
-  `).join('');
+      <div class="dim-count" style="color:${filteredCount > 0 ? (dim.key==='查验'?'var(--red)':'var(--text)') : 'var(--text-secondary)'}">${filteredCount}</div>
+      <div class="dim-desc">${filteredCount > 0 ? '点击查看明细' : '无异常'}</div>
+    </div>`;
+  }).join('');
 
   if (selectedDim !== null && selectedDim < aggregatedDimensions.length) {
     showDimensionDetail(selectedDim);
@@ -2941,7 +2996,13 @@ function renderDimensionCards(data) {
 
 function selectDimension(idx) {
   if (!aggregatedDimensions.length) return;
-  if (idx >= aggregatedDimensions.length || aggregatedDimensions[idx].count === 0) return;
+  if (idx >= aggregatedDimensions.length) return;
+  // Check filtered count
+  const dim = aggregatedDimensions[idx];
+  const filteredCount = dimensionDateFilter === 'all'
+    ? dim.count
+    : dim.items.filter(it => it.sourceDate === dimensionDateFilter).length;
+  if (filteredCount === 0) return;
 
   if (selectedDim === idx) { closeDetail(); return; }
   selectedDim = idx;
@@ -2949,23 +3010,36 @@ function selectDimension(idx) {
   showDimensionDetail(idx);
 }
 
+function onDimensionDateFilterChange() {
+  const sel = document.getElementById('dimensionDateFilter');
+  dimensionDateFilter = sel.value;
+  selectedDim = null;
+  // Re-render cards with new filter
+  const data = appData[currentYear];
+  if (data) renderDimensionCards(data);
+}
+
 function showDimensionDetail(idx) {
   if (!aggregatedDimensions.length || idx >= aggregatedDimensions.length) return;
 
   const dim = aggregatedDimensions[idx];
+  // Filter items by selected date
+  const filteredItems = dimensionDateFilter === 'all'
+    ? dim.items
+    : dim.items.filter(it => it.sourceDate === dimensionDateFilter);
   const icons = { air: '✈️', barge: '🚢', ship: '🛳️', road: '🚛', inspect: '🔍' };
-  document.getElementById('detailTitle').innerHTML = `${icons[dim.icon]} ${dim.key} — 未放行明细（${dim.count}条）`;
+  document.getElementById('detailTitle').innerHTML = `${icons[dim.icon]} ${dim.key} — 未放行明细（${filteredItems.length}条）`;
   document.getElementById('detailPanel').classList.add('show');
 
-  if (dim.items.length === 0) {
+  if (filteredItems.length === 0) {
     document.getElementById('detailBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-secondary);">无异常记录</td></tr>';
     return;
   }
 
-  document.getElementById('detailBody').innerHTML = dim.items.map((item, i) => `
+  document.getElementById('detailBody').innerHTML = filteredItems.map((item, i) => `
     <tr id="dimItem${i}">
       <td>${i + 1}</td>
-      <td style="font-size:11px;color:var(--text-secondary)">${escapeHtml(item.sourceDate || '—')}</td>
+      <td style="font-size:13px;font-weight:500;color:var(--accent)">${escapeHtml(item.sourceDate || '—')}</td>
       <td class="mono" style="font-size:13px">${escapeHtml(item.id)}</td>
       <td>${escapeHtml(item.reason)}</td>
       <td>

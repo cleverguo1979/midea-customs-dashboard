@@ -8,6 +8,7 @@ v2: SQLite 持久化存储，支持实时登记、跟进、闭环管理
 import os
 import sys
 import json
+import re
 import uuid
 import sqlite3
 import tempfile
@@ -33,9 +34,8 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Operator'
     response.headers['Access-Control-Max-Age'] = '86400'
-    # Prevent caching for API responses (static files excluded by nginx/CDN config, but we
-    # are extra careful here since Render.com may inject its own cache layer)
-    if request.path.startswith('/api/'):
+    # Prevent caching for API and HTML — data and code must always be fresh
+    if request.path.startswith('/api/') or request.path == '/' or request.path.endswith('.html'):
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
@@ -924,7 +924,7 @@ def add_follow_up_note(record_id):
 
 @app.route('/api/daily-records', methods=['POST'])
 def create_daily_record():
-    """Manually create/update a daily business record."""
+    """Manually create/update a daily business record. Supports accumulation and duplicate detection."""
     data = request.get_json(silent=True)
     if not data or 'date' not in data:
         return jsonify({'error': 'date is required'}), 400
@@ -934,31 +934,57 @@ def create_daily_record():
     rec_date = str(data['date']).strip()
     year = rec_date[:4]
 
+    new_reason = str(data.get('unclearedReason', '')).strip()
+    new_declared = data.get('totalDeclared', 0)
+    new_released = data.get('totalReleased', 0)
+    new_review = data.get('reviewCompleted', 0)
+
+    # === Duplicate detection across ALL daily records ===
+    if new_reason and new_reason != '无':
+        new_ids = _extract_item_ids(new_reason)
+        if new_ids:
+            all_rows = db.execute(
+                "SELECT id, date, unclearedReason FROM daily_records"
+                " WHERE unclearedReason IS NOT NULL AND unclearedReason != '' AND unclearedReason != '无'"
+            ).fetchall()
+            existing_ids = set()
+            for row in all_rows:
+                existing_ids |= _extract_item_ids(row['unclearedReason'])
+
+            duplicates = new_ids & existing_ids
+            if duplicates:
+                dup_list = '、'.join(sorted(duplicates))
+                return jsonify({
+                    'error': f'提单号重复，以下单号已录入：{dup_list}',
+                    'duplicates': sorted(duplicates)
+                }), 409
+
     # Check if date already exists
     existing = db.execute(
-        "SELECT id FROM daily_records WHERE date = ? AND year = ?",
+        "SELECT * FROM daily_records WHERE date = ? AND year = ?",
         (rec_date, year)
     ).fetchone()
 
     if existing:
-        # Update existing
+        # === Accumulate (叠加) instead of overwrite ===
+        total_declared = (existing['totalDeclared'] or 0) + new_declared
+        total_released = (existing['totalReleased'] or 0) + new_released
+        total_review = (existing['reviewCompleted'] or 0) + new_review
+
+        # Merge unclearedReason: append new items to existing sections
+        existing_reason = existing['unclearedReason'] or ''
+        merged_reason = _merge_uncleared_reason(existing_reason, new_reason)
+
         db.execute("""
             UPDATE daily_records SET
                 totalDeclared = ?, totalReleased = ?, reviewCompleted = ?,
                 unclearedReason = ?, updated_at = ?, source = 'manual'
             WHERE id = ?
-        """, (
-            data.get('totalDeclared', 0),
-            data.get('totalReleased', 0),
-            data.get('reviewCompleted', 0),
-            str(data.get('unclearedReason', '')).strip(),
-            now,
-            existing['id']
-        ))
+        """, (total_declared, total_released, total_review, merged_reason, now, existing['id']))
         db.commit()
         log_operation(
             action='update_daily', record_type='daily', record_id=existing['id'],
-            record_summary=f'更新日报: {rec_date}',
+            record_summary=f'叠加日报: {rec_date} (+{new_declared}申报/+{new_released}放行/+{new_review}审结)',
             changes=data,
             operator=get_operator()
         )
@@ -974,10 +1000,8 @@ def create_daily_record():
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual')
     """, (
         rid, rec_date, year, dt.month, dt.day,
-        data.get('totalDeclared', 0),
-        data.get('totalReleased', 0),
-        data.get('reviewCompleted', 0),
-        str(data.get('unclearedReason', '')).strip(),
+        new_declared, new_released, new_review,
+        new_reason if new_reason else '',
         now, now
     ))
     db.commit()
@@ -990,6 +1014,32 @@ def create_daily_record():
     )
 
     return jsonify({'success': True, 'id': rid, 'action': 'created'}), 201
+
+
+@app.route('/api/daily-records/by-date/<rec_date>', methods=['GET'])
+def get_daily_record_by_date(rec_date):
+    """Return a daily record by date for form pre-fill, or null if not found."""
+    db = get_db()
+    year = rec_date[:4]
+    row = db.execute(
+        "SELECT * FROM daily_records WHERE date = ? AND year = ?",
+        (rec_date, year)
+    ).fetchone()
+
+    if not row:
+        return jsonify({'found': False, 'record': None})
+
+    return jsonify({
+        'found': True,
+        'record': {
+            'id': row['id'],
+            'date': row['date'],
+            'totalDeclared': row['totalDeclared'],
+            'totalReleased': row['totalReleased'],
+            'reviewCompleted': row['reviewCompleted'],
+            'unclearedReason': row['unclearedReason']
+        }
+    })
 
 
 # ---------------- Clear ----------------
@@ -1754,6 +1804,18 @@ def add_dimension_item(record_id):
     item_id = str(data['item_id']).strip()
     item_reason = str(data.get('reason', '')).strip()
 
+    # Duplicate check against ALL daily records
+    all_rows = db.execute(
+        "SELECT id, date, unclearedReason FROM daily_records"
+        " WHERE unclearedReason IS NOT NULL AND unclearedReason != '' AND unclearedReason != '无'"
+    ).fetchall()
+    for row in all_rows:
+        if item_id in _extract_item_ids(row['unclearedReason'] or ''):
+            return jsonify({
+                'error': f'提单号重复，「{item_id}」已存在于 {row["date"]}',
+                'duplicate': item_id
+            }), 409
+
     new_reason = add_item_to_reason(old_reason, dim_name, item_id, item_reason)
 
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
@@ -1775,6 +1837,74 @@ def add_dimension_item(record_id):
     )
 
     return jsonify({'success': True, 'new_uncleared': new_reason, 'reviewCompleted': new_review_completed})
+
+
+def _parse_uncleared_sections(reason_str):
+    """Parse unclearedReason text into {dim_name: [item_lines]} dict."""
+    if not reason_str or reason_str == '无':
+        return {}
+    dim_keys = ['空运', '驳船', '大船', '公路', '查验']
+    sections = {k: [] for k in dim_keys}
+    current_dim = None
+    for line in reason_str.split('\n'):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        is_header = False
+        for dk in dim_keys:
+            if stripped.startswith(dk + '：') or stripped.startswith(dk + ':'):
+                current_dim = dk
+                is_header = True
+                break
+        if is_header:
+            continue
+        if re.match(r'^\d+票', stripped) or '审结未放行' in stripped:
+            continue
+        if current_dim:
+            sections[current_dim].append(stripped)
+    return {k: v for k, v in sections.items() if v}
+
+
+def _rebuild_uncleared_text(sections):
+    """Rebuild unclearedReason text from {dim_name: [item_lines]} dict."""
+    total = sum(len(v) for v in sections.values())
+    if total == 0:
+        return '无'
+    lines = [f"{total}票审结未放行 "]
+    for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
+        items = sections.get(dim_name, [])
+        if items:
+            lines.append(f"{dim_name}：")
+            lines.extend(items)
+    return '\n'.join(lines)
+
+
+def _extract_item_ids(reason_str):
+    """Extract all item IDs (first token of each line) from unclearedReason. Returns a set."""
+    sections = _parse_uncleared_sections(reason_str)
+    ids = set()
+    for items in sections.values():
+        for item_line in items:
+            parts = item_line.split(None, 1)
+            if parts:
+                ids.add(parts[0])
+    return ids
+
+
+def _merge_uncleared_reason(existing_str, new_str):
+    """Merge new uncleared items into existing text. New items append to each dimension."""
+    if not new_str or new_str == '无':
+        return existing_str or '无'
+    if not existing_str or existing_str == '无':
+        return new_str
+    existing_sections = _parse_uncleared_sections(existing_str)
+    new_sections = _parse_uncleared_sections(new_str)
+    merged = {}
+    for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
+        existing_items = existing_sections.get(dim_name, [])
+        new_items = new_sections.get(dim_name, [])
+        merged[dim_name] = existing_items + new_items
+    return _rebuild_uncleared_text(merged)
 
 
 def remove_item_from_reason(reason_str, dimension, item_text):
