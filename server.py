@@ -43,7 +43,8 @@ def add_cors_headers(response):
 
 
 def get_operator():
-    """Extract operator name from JSON body or X-Operator header, fallback to 匿名."""
+    """Extract operator name from JSON body, URL param, or X-Operator header."""
+    from urllib.parse import unquote
     # 1) Try JSON body (_operator field)
     try:
         data = request.get_json(silent=True)
@@ -53,9 +54,17 @@ def get_operator():
                 return name
     except Exception:
         pass
-    # 2) Try X-Operator header (URI-encoded by frontend for non-Latin-1 chars)
+    # 2) Try URL query param (used by DELETE which has no body)
     try:
-        from urllib.parse import unquote
+        qp = request.args.get('_operator', '')
+        if qp:
+            name = unquote(qp).strip()
+            if name:
+                return name
+    except Exception:
+        pass
+    # 3) Try X-Operator header (legacy, URI-encoded)
+    try:
         header_val = request.headers.get('X-Operator', '')
         if header_val:
             name = unquote(header_val).strip()

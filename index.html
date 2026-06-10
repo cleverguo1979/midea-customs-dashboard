@@ -1638,9 +1638,9 @@ async function deleteRecord() {
   const recordId = document.getElementById('editRecordId').value;
   if (!confirm('确定要删除这条记录吗？此操作可以恢复（软删除）。')) return;
   try {
-    const res = await fetch(API_SERVER + '/api/abnormal-records/' + recordId, {
-      method: 'DELETE',
-      headers: { 'X-Operator': encodeURIComponent(operatorName) }
+    const res = await fetch(API_SERVER + '/api/abnormal-records/' + recordId
+      + '?_operator=' + encodeURIComponent(operatorName), {
+      method: 'DELETE'
     });
     const result = await res.json();
     if (result.success) {
