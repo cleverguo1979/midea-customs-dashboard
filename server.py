@@ -43,12 +43,24 @@ def add_cors_headers(response):
 
 
 def get_operator():
-    """Extract operator name from JSON body (_operator field), fallback to 匿名.
-    Must be called after request.get_json()."""
+    """Extract operator name from JSON body or X-Operator header, fallback to 匿名."""
+    # 1) Try JSON body (_operator field)
     try:
         data = request.get_json(silent=True)
         if data and '_operator' in data:
-            return str(data['_operator']).strip() or '匿名'
+            name = str(data['_operator']).strip()
+            if name:
+                return name
+    except Exception:
+        pass
+    # 2) Try X-Operator header (URI-encoded by frontend for non-Latin-1 chars)
+    try:
+        from urllib.parse import unquote
+        header_val = request.headers.get('X-Operator', '')
+        if header_val:
+            name = unquote(header_val).strip()
+            if name:
+                return name
     except Exception:
         pass
     return '匿名'
@@ -993,7 +1005,7 @@ def clear_data():
         record_type='system',
         record_summary=f'清零所有数据: {daily_count} 天日报, {abnormal_count} 条异常',
         changes={'daily_count': daily_count, 'abnormal_count': abnormal_count},
-        operator=request.headers.get('X-Operator', '管理员')
+        operator=get_operator()
     )
 
     # Delete all data

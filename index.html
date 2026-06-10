@@ -1042,7 +1042,7 @@ async function pushToCloud(dataToSave) {
     form.append('file', blob, 'data.json');
     const resp = await fetch(API_SERVER + '/api/upload?mode=replace', {
       method: 'POST',
-      headers: { 'X-Operator': operatorName },
+      headers: { 'X-Operator': encodeURIComponent(operatorName) },
       body: form
     });
     if (resp.ok) {
@@ -1640,7 +1640,7 @@ async function deleteRecord() {
   try {
     const res = await fetch(API_SERVER + '/api/abnormal-records/' + recordId, {
       method: 'DELETE',
-      headers: { 'X-Operator': operatorName }
+      headers: { 'X-Operator': encodeURIComponent(operatorName) }
     });
     const result = await res.json();
     if (result.success) {
