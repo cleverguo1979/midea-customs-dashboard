@@ -852,7 +852,7 @@
   <div class="section-header">
     <span class="section-title">📋 异常跟踪表</span>
     <span class="section-badge" id="abnormalCount">共 0 条</span>
-    <span class="risk-pill" id="riskPill" style="display:none;cursor:pointer;margin-left:6px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#f0f0f5;color:#8e8e93" onclick="openRiskModal()">⚡ 风险 0</span>
+    <span class="risk-pill" id="riskPill" style="display:none;cursor:pointer;margin-left:6px;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;background:#f0f0f5;color:#8e8e93">⚡ 风险 0</span>
   </div>
   <div class="table-card">
     <div class="summary-bar" id="summaryBar"></div>
@@ -1273,30 +1273,11 @@ function bindEvents() {
   document.getElementById('btnConfirmSave').addEventListener('click', confirmRegisterSave);
   document.getElementById('btnConfirmBack').addEventListener('click', confirmRegisterBack);
 
-function openRiskModal() {
-  const data = document.getElementById('riskPill')._data;
-  if (!data) return;
-  const { dupCustoms, customsNoSeqs } = data;
-  document.getElementById('riskModalBody').innerHTML = `
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="border-bottom:1px solid #e5e5ea;color:var(--text-secondary);font-size:11px;text-align:left">
-        <th style="padding:6px 8px">报关单号</th>
-        <th style="padding:6px 8px;text-align:center">次数</th>
-        <th style="padding:6px 8px">涉及序号</th>
-      </tr></thead>
-      <tbody>${dupCustoms.map(([cno,c]) => `
-        <tr style="border-bottom:1px solid #f0f0f5">
-          <td style="padding:8px;font-family:var(--font-mono);font-size:13px">${escapeHtml(cno)}</td>
-          <td style="padding:8px;text-align:center;font-weight:700;color:#c0392b">${c}</td>
-          <td style="padding:8px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary)">${customsNoSeqs[cno].join(', ')}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-  document.getElementById('riskModal').classList.add('show');
-}
-function closeRiskModal() {
-  document.getElementById('riskModal').classList.remove('show');
-}
+  // Risk modal
+  document.getElementById('riskPill').addEventListener('click', openRiskModal);
+  document.getElementById('riskModal').addEventListener('click', function(e) {
+    if (e.target === this) closeRiskModal();
+  });
   // dailyRegisterModal — no click-outside-to-close to prevent accidental loss of input data
   // Add uncleared item modal
   document.getElementById('btnAddUnclearedCancel').addEventListener('click', closeAddUnclearedModal);
@@ -1326,6 +1307,32 @@ function closeRiskModal() {
   document.querySelectorAll('.year-btn').forEach(btn => {
     btn.addEventListener('click', () => switchYear(btn.dataset.year));
   });
+}
+
+function openRiskModal() {
+  const pill = document.getElementById('riskPill');
+  const data = pill._data;
+  if (!data) return;
+  const { dupCustoms, customsNoSeqs } = data;
+  document.getElementById('riskModalBody').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:1px solid #e5e5ea;color:var(--text-secondary);font-size:11px;text-align:left">
+        <th style="padding:6px 8px">报关单号</th>
+        <th style="padding:6px 8px;text-align:center">次数</th>
+        <th style="padding:6px 8px">涉及序号</th>
+      </tr></thead>
+      <tbody>${dupCustoms.map(([cno,c]) => `
+        <tr style="border-bottom:1px solid #f0f0f5">
+          <td style="padding:8px;font-family:var(--font-mono);font-size:13px">${escapeHtml(cno)}</td>
+          <td style="padding:8px;text-align:center;font-weight:700;color:#c0392b">${c}</td>
+          <td style="padding:8px;font-family:var(--font-mono);font-size:11px;color:var(--text-secondary)">${customsNoSeqs[cno].join(', ')}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  document.getElementById('riskModal').classList.add('show');
+}
+function closeRiskModal() {
+  document.getElementById('riskModal').classList.remove('show');
 }
 
 function openSettings() {
@@ -3354,7 +3361,6 @@ function renderAbnormalTable(data) {
     riskPill.style.color = '#c0392b';
     riskPill.innerHTML = `⚠️ 风险 ${dupCustoms.length} 项 · ${riskTotal} 条`;
     riskPill.title = '点击查看重复报关单明细';
-    // Store modal data
     riskPill._data = { dupCustoms, customsNoSeqs };
   } else {
     riskPill.style.display = '';
