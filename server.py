@@ -1896,22 +1896,75 @@ def _extract_item_ids(reason_str):
 
 
 def _merge_uncleared_reason(existing_str, new_str):
-    """Merge new uncleared items into existing text. Deduplicates by item ID within each dimension."""
+    """Merge new uncleared items into existing text by appending to each dimension section.
+    Preserves original text format — does NOT rebuild, only appends truly new items."""
     if not new_str or new_str == '无':
         return existing_str or '无'
     if not existing_str or existing_str == '无':
         return new_str
+
     existing_sections = _parse_uncleared_sections(existing_str)
     new_sections = _parse_uncleared_sections(new_str)
-    merged = {}
+
+    # Collect truly new items per dimension
+    to_append = {}
     for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
         existing_items = existing_sections.get(dim_name, [])
         new_items = new_sections.get(dim_name, [])
-        # Dedup: only add new items whose ID isn't already in existing items
         existing_ids = {item.split(None, 1)[0] for item in existing_items}
         truly_new = [item for item in new_items if item.split(None, 1)[0] not in existing_ids]
-        merged[dim_name] = existing_items + truly_new
-    return _rebuild_uncleared_text(merged)
+        if truly_new:
+            to_append[dim_name] = truly_new
+
+    if not to_append:
+        return existing_str  # No new items
+
+    # Append new items to existing text at the correct dimension sections
+    lines = existing_str.split('\n')
+    result = []
+    i = 0
+    dim_keys = ['空运', '驳船', '大船', '公路', '查验']
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+        # Check if this is a dimension header
+        current_dim = None
+        for dk in dim_keys:
+            if stripped.startswith(dk + '：') or stripped.startswith(dk + ':'):
+                current_dim = dk
+                break
+        if current_dim and current_dim in to_append:
+            result.append(line)  # Keep the header
+            i += 1
+            # Append existing items until next header or end
+            while i < len(lines):
+                next_stripped = lines[i].strip()
+                is_next_header = False
+                for dk in dim_keys:
+                    if next_stripped.startswith(dk + '：') or next_stripped.startswith(dk + ':'):
+                        is_next_header = True
+                        break
+                if is_next_header:
+                    break
+                if next_stripped:  # Non-empty item line
+                    result.append(lines[i])
+                i += 1
+            # Append truly new items after existing items
+            for new_item in to_append[current_dim]:
+                result.append(new_item)
+            del to_append[current_dim]  # Mark as done
+        else:
+            result.append(line)
+            i += 1
+
+    # If there are leftover dimensions not found in existing text, append at end
+    for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
+        if dim_name in to_append:
+            result.append(f"{dim_name}：")
+            for new_item in to_append[dim_name]:
+                result.append(new_item)
+
+    return '\n'.join(result)
 
 
 def remove_item_from_reason(reason_str, dimension, item_text):
