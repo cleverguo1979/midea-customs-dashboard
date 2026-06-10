@@ -1297,6 +1297,10 @@ def export_report():
                   if not str(cf.sqref).replace('$', '').startswith('H')]
     ws_abnormal.conditional_formatting = cf_to_keep
 
+    # Remove auto-filters from both sheets (exported file should show all data)
+    ws_daily.auto_filter.ref = None
+    ws_abnormal.auto_filter.ref = None
+
     # ============================================================
     # Remove 2025 sheets and Sheet3 (only keep 2026 sheets)
     # ============================================================
