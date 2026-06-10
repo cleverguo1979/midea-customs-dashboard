@@ -680,9 +680,20 @@
         <div class="uncleared-preview" id="unclearedPreview"></div>
       </div>
     </div>
-    <div class="form-actions">
+    <!-- Confirm preview area (hidden initially) -->
+    <div class="register-confirm" id="registerConfirm" style="display:none;padding:0 24px 16px">
+      <div style="background:#f0f4ff;border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="font-weight:600;font-size:14px;margin-bottom:8px">📋 未放行明细预览 — 确认后将追加到当日记录</div>
+        <div id="registerConfirmPreview" style="font-size:13px;max-height:200px;overflow-y:auto"></div>
+      </div>
+    </div>
+    <div class="form-actions" id="formActionsNormal">
       <button class="btn-form ghost" id="btnDailyCancel">取消</button>
       <button class="btn-form primary" id="btnDailySubmit">保存业务量</button>
+    </div>
+    <div class="form-actions" id="formActionsConfirm" style="display:none">
+      <button class="btn-form ghost" id="btnConfirmBack">返回修改</button>
+      <button class="btn-form primary" id="btnConfirmSave" style="background:#34c759">✅ 确认登记</button>
     </div>
   </div>
 </div>
@@ -1242,6 +1253,8 @@ function bindEvents() {
   document.getElementById('btnDailyRegister').addEventListener('click', openDailyRegisterModal);
   document.getElementById('btnDailyCancel').addEventListener('click', closeDailyRegisterModal);
   document.getElementById('btnDailySubmit').addEventListener('click', submitDailyRegister);
+  document.getElementById('btnConfirmSave').addEventListener('click', confirmRegisterSave);
+  document.getElementById('btnConfirmBack').addEventListener('click', confirmRegisterBack);
   // dailyRegisterModal — no click-outside-to-close to prevent accidental loss of input data
   // Add uncleared item modal
   document.getElementById('btnAddUnclearedCancel').addEventListener('click', closeAddUnclearedModal);
@@ -1744,12 +1757,24 @@ function openDailyRegisterModal() {
   document.getElementById('unclearedPreview').innerHTML = '';
   document.getElementById('unclearedSection').style.display = 'none';
   document.getElementById('unclearedToggleIcon').classList.remove('open');
+  // Reset confirm state
+  pendingRegisterData = null;
+  document.getElementById('registerConfirm').style.display = 'none';
+  document.getElementById('formActionsNormal').style.display = '';
+  document.getElementById('formActionsConfirm').style.display = 'none';
   document.getElementById('dailyRegisterModal').classList.add('show');
 }
 
 function closeDailyRegisterModal() {
   document.getElementById('dailyRegisterModal').classList.remove('show');
+  // Reset confirm state
+  pendingRegisterData = null;
+  document.getElementById('registerConfirm').style.display = 'none';
+  document.getElementById('formActionsNormal').style.display = '';
+  document.getElementById('formActionsConfirm').style.display = 'none';
 }
+
+let pendingRegisterData = null;  // Holds form data during confirmation step
 
 async function submitDailyRegister() {
   const date = document.getElementById('dailyDate').value;
@@ -1759,6 +1784,41 @@ async function submitDailyRegister() {
     showToast('请填写日期');
     return;
   }
+  const unclearedRaw = document.getElementById('unclearedPaste').value.trim();
+
+  // If there's uncleared detail, show preview first for confirmation
+  if (unclearedRaw) {
+    const dims = parseUnclearedDimensions(unclearedRaw);
+    const total = dims.reduce((s, d) => s + d.count, 0);
+    if (total === 0) {
+      showToast('⚠️ 未识别到有效的维度条目，请检查格式');
+      return;
+    }
+    // Show preview
+    document.getElementById('registerConfirmPreview').innerHTML = dims.map(d => {
+      if (d.count === 0) return '';
+      const items = d.items.map(it => `<span style="font-family:monospace">${escapeHtml(it.id)}</span> ${escapeHtml(it.reason)}`).join('<br>');
+      return `<div style="margin-bottom:8px"><b>${d.emoji} ${d.key} ×${d.count}</b><br><span style="color:#555">${items}</span></div>`;
+    }).filter(Boolean).join('') + `<div style="border-top:1px solid #d1d1d6;margin-top:8px;padding-top:8px;font-weight:600">共 <b>${total}</b> 条未放行条目待追加</div>`;
+    document.getElementById('registerConfirm').style.display = 'block';
+    document.getElementById('formActionsNormal').style.display = 'none';
+    document.getElementById('formActionsConfirm').style.display = '';
+
+    // Store form data for later submission
+    pendingRegisterData = {
+      date, declared, released,
+      reviewCompleted: parseInt(document.getElementById('dailyReview').value) || 0,
+      unclearedReason: unclearedRaw
+    };
+    return;
+  }
+
+  // No uncleared detail — submit directly
+  await doSubmitDailyRegister(date, declared, released,
+    parseInt(document.getElementById('dailyReview').value) || 0, '');
+}
+
+async function doSubmitDailyRegister(date, declared, released, reviewCompleted, unclearedReason) {
   try {
     const res = await fetch(API_SERVER + '/api/daily-records', {
       method: 'POST',
@@ -1767,14 +1827,14 @@ async function submitDailyRegister() {
         date,
         totalDeclared: declared,
         totalReleased: released,
-        reviewCompleted: parseInt(document.getElementById('dailyReview').value) || 0,
-        unclearedReason: document.getElementById('unclearedPaste').value.trim(),
+        reviewCompleted: reviewCompleted,
+        unclearedReason: unclearedReason,
         _operator: operatorName
       })
     });
     const result = await res.json();
     if (result.success) {
-      showToast('✅ 业务量已' + (result.action === 'updated' ? '更新' : '登记'));
+      showToast('✅ 业务量已' + (result.action === 'updated' ? '叠加' : '登记'));
       closeDailyRegisterModal();
       await fetchCloudData();
       renderAll();
@@ -1784,6 +1844,20 @@ async function submitDailyRegister() {
   } catch(e) {
     showToast('服务器请求失败: ' + e.message);
   }
+}
+
+function confirmRegisterSave() {
+  if (!pendingRegisterData) return;
+  const d = pendingRegisterData;
+  doSubmitDailyRegister(d.date, d.declared, d.released, d.reviewCompleted, d.unclearedReason);
+  pendingRegisterData = null;
+}
+
+function confirmRegisterBack() {
+  pendingRegisterData = null;
+  document.getElementById('registerConfirm').style.display = 'none';
+  document.getElementById('formActionsNormal').style.display = '';
+  document.getElementById('formActionsConfirm').style.display = 'none';
 }
 
 // ==================== BATCH OPERATIONS ====================
