@@ -939,7 +939,15 @@ def create_daily_record():
     new_released = data.get('totalReleased', 0)
     new_review = data.get('reviewCompleted', 0)
 
-    # === Duplicate detection across ALL daily records ===
+    # Check if date already exists (needed early for duplicate check exclusion)
+    existing = db.execute(
+        "SELECT * FROM daily_records WHERE date = ? AND year = ?",
+        (rec_date, year)
+    ).fetchone()
+
+    # === Duplicate detection ===
+    # When updating same date, exclude own record's IDs so pre-filled items don't
+    # cause false duplicates. The merge function handles dedup within the same record.
     if new_reason and new_reason != '无':
         new_ids = _extract_item_ids(new_reason)
         if new_ids:
@@ -947,9 +955,11 @@ def create_daily_record():
                 "SELECT id, date, unclearedReason FROM daily_records"
                 " WHERE unclearedReason IS NOT NULL AND unclearedReason != '' AND unclearedReason != '无'"
             ).fetchall()
-            existing_ids = set()
+            existing_ids = set()  # IDs from OTHER records only
             for row in all_rows:
-                existing_ids |= _extract_item_ids(row['unclearedReason'])
+                if existing and row['id'] == existing['id']:
+                    continue  # Skip own record — merge handles dedup
+                existing_ids |= _extract_item_ids(row['unclearedReason'] or '')
 
             duplicates = new_ids & existing_ids
             if duplicates:
@@ -958,12 +968,6 @@ def create_daily_record():
                     'error': f'提单号重复，以下单号已录入：{dup_list}',
                     'duplicates': sorted(duplicates)
                 }), 409
-
-    # Check if date already exists
-    existing = db.execute(
-        "SELECT * FROM daily_records WHERE date = ? AND year = ?",
-        (rec_date, year)
-    ).fetchone()
 
     if existing:
         # === Accumulate (叠加) instead of overwrite ===
@@ -1892,7 +1896,7 @@ def _extract_item_ids(reason_str):
 
 
 def _merge_uncleared_reason(existing_str, new_str):
-    """Merge new uncleared items into existing text. New items append to each dimension."""
+    """Merge new uncleared items into existing text. Deduplicates by item ID within each dimension."""
     if not new_str or new_str == '无':
         return existing_str or '无'
     if not existing_str or existing_str == '无':
@@ -1903,7 +1907,10 @@ def _merge_uncleared_reason(existing_str, new_str):
     for dim_name in ['空运', '驳船', '大船', '公路', '查验']:
         existing_items = existing_sections.get(dim_name, [])
         new_items = new_sections.get(dim_name, [])
-        merged[dim_name] = existing_items + new_items
+        # Dedup: only add new items whose ID isn't already in existing items
+        existing_ids = {item.split(None, 1)[0] for item in existing_items}
+        truly_new = [item for item in new_items if item.split(None, 1)[0] not in existing_ids]
+        merged[dim_name] = existing_items + truly_new
     return _rebuild_uncleared_text(merged)
 
 
