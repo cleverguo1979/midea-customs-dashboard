@@ -892,6 +892,25 @@ let operatorName = '匿名';
 function isUnclosed(status) {
   return !!(status && (status.includes('未闭环') || status.includes('未关闭')));
 }
+
+// Safe fetch wrapper: ensures no non-Latin-1 chars sneak into headers
+const _origFetch = window.fetch;
+window.fetch = function(url, init = {}) {
+  if (init.headers) {
+    try {
+      new Headers(init.headers);  // will throw if any value has non-Latin-1 chars
+    } catch(e) {
+      console.error('[fetch拦截] Headers包含非法字符, url:', url, 'headers:', JSON.stringify(init.headers));
+      // Strip any custom header that might have encoding issues; keep only safe ones
+      const safe = {};
+      if (init.headers['Content-Type'] || init.headers['content-type']) {
+        safe['Content-Type'] = init.headers['Content-Type'] || init.headers['content-type'];
+      }
+      init = Object.assign({}, init, { headers: safe });
+    }
+  }
+  return _origFetch.call(window, url, init);
+};
 // API server detection:
 // - Local dev (localhost/LAN IP) → use same origin
 // - Custom domain (cleverguo.cn) → use same origin (frontend + backend on one server)
