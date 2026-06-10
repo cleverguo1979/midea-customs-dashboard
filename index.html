@@ -655,7 +655,7 @@
 <div class="form-modal-overlay" id="dailyRegisterModal">
   <div class="form-modal-box" style="width:640px">
     <h3>📊 登记今日业务量</h3>
-    <div class="form-desc">手动登记当日申报数据，如当日已有数据则会更新</div>
+    <div class="form-desc">每次登记为追加批次，数值累加、明细合并；同提单号不可重复录入</div>
     <div class="form-body">
       <div class="form-row single">
         <div class="form-group"><label>日期 *</label><input type="date" id="dailyDate"></div>
@@ -1734,7 +1734,7 @@ function previewUnclearedPaste() {
   }).join('') + `<div style="grid-column:1/-1;font-size:12px;color:var(--accent);text-align:right">共 <b>${total}</b> 条未放行条目，保存后将自动写入</div>`;
 }
 
-async function openDailyRegisterModal() {
+function openDailyRegisterModal() {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('dailyDate').value = today;
   document.getElementById('dailyDeclared').value = '';
@@ -1745,21 +1745,6 @@ async function openDailyRegisterModal() {
   document.getElementById('unclearedSection').style.display = 'none';
   document.getElementById('unclearedToggleIcon').classList.remove('open');
   document.getElementById('dailyRegisterModal').classList.add('show');
-
-  // Pre-fill from existing record for this date (if any)
-  try {
-    const resp = await fetch(API_SERVER + '/api/daily-records/by-date/' + encodeURIComponent(today));
-    if (resp.ok) {
-      const result = await resp.json();
-      if (result.found && result.record) {
-        const r = result.record;
-        if (r.totalDeclared > 0) document.getElementById('dailyDeclared').value = r.totalDeclared;
-        if (r.totalReleased > 0) document.getElementById('dailyReleased').value = r.totalReleased;
-        if (r.reviewCompleted > 0) document.getElementById('dailyReview').value = r.reviewCompleted;
-        if (r.unclearedReason) document.getElementById('unclearedPaste').value = r.unclearedReason;
-      }
-    }
-  } catch(e) { /* ignore, use defaults */ }
 }
 
 function closeDailyRegisterModal() {
