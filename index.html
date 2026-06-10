@@ -881,12 +881,17 @@ let currentYear = '2026';
 let monthlyChart = null, bizUnitChart = null, categoryChart = null;
 let selectedDim = null;
 let abnormalRecords = [];
-let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
+let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '' };
 let abnormalSort = { field: 'date', asc: false };
 let apiKey = '';
 let aiCache = null;
 let batchSelected = new Set();
 let operatorName = '匿名';
+
+// Unified status helper: both '未闭环' and '未关闭' are considered unresolved
+function isUnclosed(status) {
+  return !!(status && (status.includes('未闭环') || status.includes('未关闭')));
+}
 // API server detection:
 // - Local dev (localhost/LAN IP) → use same origin
 // - Custom domain (cleverguo.cn) → use same origin (frontend + backend on one server)
@@ -1475,7 +1480,7 @@ function openEditModalById(recordId) {
   document.getElementById('editRecordId').value = recordId;
   document.getElementById('editRecordDesc').textContent = `${record.company || '—'} · ${record.bolNo || record.customsNo || '—'} · ${fmtDate(record.date)}`;
   document.getElementById('editCategory').value = record.category || '';
-  document.getElementById('editStatus').value = (record.status && record.status.includes('未闭环')) ? '未闭环' : '已闭环';
+  document.getElementById('editStatus').value = isUnclosed(record.status) ? '未闭环' : '已闭环';
   // Setup fuzzy company input and auto-fill bizUnit
   setupCompanyFuzzyInput('editCompany', 'editBizUnit', 'editCompanyList', record.company || '');
   if (record.bizUnit) document.getElementById('editBizUnit').value = record.bizUnit || '';
@@ -1843,7 +1848,7 @@ async function executeClear() {
       currentYear = '2026';
       selectedDim = null;
       abnormalRecords = [];
-      abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
+      abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '' };
       abnormalSort = { field: 'date', asc: false };
       batchSelected.clear();
       document.getElementById('detailPanel').classList.remove('show');
@@ -2203,7 +2208,7 @@ function renderKPIs(data) {
   }
 
   const openCount = abnormalRecs.filter(r =>
-    r.status && (r.status.includes('未闭环') || r.status.includes('未关闭'))
+    isUnclosed(r.status)
   ).length;
 
   const prevMonth = thisMonth === 1 ? 12 : thisMonth - 1;
@@ -2497,7 +2502,7 @@ function renderAnalysis(data) {
 function computeInsightStats(records) {
   const total = records.length;
   // Match table logic: empty status or anything not containing 未闭环 is closed
-  const openCount = records.filter(r => r.status && (r.status.includes('未闭环') || r.status.includes('未关闭'))).length;
+  const openCount = records.filter(r => isUnclosed(r.status)).length;
   const closed = total - openCount;
   const closeRate = total > 0 ? (closed / total * 100).toFixed(1) : 0;
 
@@ -2519,7 +2524,7 @@ function computeInsightStats(records) {
   records.forEach(r => { const x = r.responsible || '未知'; respMap[x] = (respMap[x] || 0) + 1; });
 
   const openByCat = {};
-  records.filter(r => r.status && r.status.includes('未闭环')).forEach(r => {
+  records.filter(r => isUnclosed(r.status)).forEach(r => {
     let k = (!r.category || r.category === '(空)') ? '其他' : r.category;
     if (k.includes('查验')) k = '查验'; else if (k.includes('删改单')) k = '删改单'; else k = '其他';
     openByCat[k] = (openByCat[k] || 0) + 1;
@@ -2531,7 +2536,7 @@ function computeInsightStats(records) {
 function dataFingerprint(records) {
   // Simple hash to detect data changes (for AI cache invalidation)
   return records.length + '|' +
-    records.filter(r => r.status && r.status.includes('未闭环')).length + '|' +
+    records.filter(r => isUnclosed(r.status)).length + '|' +
     (records[0] ? (records[0].date || '') : '') + '|' +
     (records[records.length-1] ? (records[records.length-1].date || '') : '');
 }
@@ -2660,7 +2665,7 @@ async function callAI(stats, records) {
 
   // Sample some unclosed records for context
   const unclosedSamples = records
-    .filter(r => r.status && r.status.includes('未闭环'))
+    .filter(r => isUnclosed(r.status))
     .slice(0, 10)
     .map(r => `[${r.category}] ${r.bizUnit} | ${(r.description||'').substring(0,60)} | 责任:${r.responsible}`);
 
@@ -3097,7 +3102,7 @@ function renderAbnormalTable(data) {
     categories[cat] = (categories[cat] || 0) + 1;
     const bu = r.bizUnit || '(空)';
     bizUnits[bu] = (bizUnits[bu] || 0) + 1;
-    if (r.status && (r.status.includes('未闭环') || r.status.includes('未关闭'))) openCount++;
+    if (isUnclosed(r.status)) openCount++;
     else closedCount++;
   });
 
@@ -3119,16 +3124,16 @@ function renderAbnormalTable(data) {
   const uniqueCategories = [...new Set(records.map(r => r.category).filter(Boolean))].sort();
 
   document.getElementById('filterBar').innerHTML = `
-    <input type="text" class="filter-input" id="filterKeyword" placeholder="🔍 搜索报关单号/提运单号/描述..." value="${abnormalFilters.keyword}">
-    <select class="filter-select" id="filterBizUnit">
+    <input type="text" class="filter-input" id="filterKeyword" placeholder="🔍 搜索报关单号/提运单号/描述..." value="${abnormalFilters.keyword}" autocomplete="off">
+    <select class="filter-select" id="filterBizUnit" autocomplete="off">
       <option value="">全部事业部</option>
       ${uniqueBizUnits.map(u => `<option value="${u}"${abnormalFilters.bizUnit===u?' selected':''}>${u}</option>`).join('')}
     </select>
-    <select class="filter-select" id="filterCategory">
+    <select class="filter-select" id="filterCategory" autocomplete="off">
       <option value="">全部异常类别</option>
       ${uniqueCategories.map(c => `<option value="${c}"${abnormalFilters.category===c?' selected':''}>${c}</option>`).join('')}
     </select>
-    <select class="filter-select" id="filterStatus">
+    <select class="filter-select" id="filterStatus" autocomplete="off">
       <option value="">全部状态</option>
       <option value="已闭环"${abnormalFilters.status==='已闭环'?' selected':''}>已闭环</option>
       <option value="未闭环"${abnormalFilters.status==='未闭环'?' selected':''}>未闭环</option>
@@ -3139,6 +3144,14 @@ function renderAbnormalTable(data) {
   document.getElementById('filterBizUnit').addEventListener('change', applyFilters);
   document.getElementById('filterCategory').addEventListener('change', applyFilters);
   document.getElementById('filterStatus').addEventListener('change', applyFilters);
+
+  // Defensive: ensure filter stays in sync, beating any browser form restoration
+  document.getElementById('filterStatus').value = abnormalFilters.status;
+  setTimeout(() => {
+    if (document.getElementById('filterStatus')) {
+      document.getElementById('filterStatus').value = abnormalFilters.status;
+    }
+  }, 50);
 
   // Table headers — widths tuned so all content stays single-line
   const columns = [
@@ -3211,7 +3224,19 @@ function renderTableBody() {
   }
   if (abnormalFilters.bizUnit) records = records.filter(r => r.bizUnit === abnormalFilters.bizUnit);
   if (abnormalFilters.category) records = records.filter(r => r.category === abnormalFilters.category);
-  if (abnormalFilters.status) records = records.filter(r => r.status && r.status.includes(abnormalFilters.status));
+	  if (abnormalFilters.status) {
+	    records = records.filter(r => abnormalFilters.status === '未闭环' ? isUnclosed(r.status) : r.status && r.status.includes(abnormalFilters.status));
+	  }
+	  // Update count display: show filtered vs total
+	  const totalCount = abnormalRecords.length;
+	  const filteredCount = records.length;
+	  const hasActiveFilter = abnormalFilters.keyword || abnormalFilters.bizUnit || abnormalFilters.category || abnormalFilters.status;
+	  if (hasActiveFilter && filteredCount !== totalCount) {
+	    document.getElementById('abnormalCount').textContent = `共 ${filteredCount} / ${totalCount} 条（已筛选）`;
+	  } else {
+	    document.getElementById('abnormalCount').textContent = `共 ${totalCount} 条`;
+	  }
+
 
   if (abnormalSort.field) {
     records.sort((a, b) => {
@@ -3231,7 +3256,7 @@ function renderTableBody() {
     document.getElementById('abnormalTableBody').innerHTML = records.map((r, i) => {
         const catBadgeClass = (r.category||'').includes('查验') ? 'badge-cat-inspect' :
                               ((r.category||'').includes('删改单')||(r.category||'').includes('退柜')) ? 'badge-cat' : 'badge-cat-other';
-        const isClosed = !(r.status||'').includes('未闭环');
+        const isClosed = !isUnclosed(r.status);
         const statusBadge = isClosed
           ? '<span class="badge badge-closed status-toggle" title="点击切换状态">已闭环</span>'
           : '<span class="badge badge-open status-toggle" title="点击切换状态">未闭环</span>';
@@ -3265,7 +3290,7 @@ function renderTableBody() {
           <td colspan="13"><div class="expand-detail" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 24px;font-size:13px;line-height:1.8">
             <div><strong>日期：</strong>${escapeHtml(fmtDate(r.date))}</div>
             <div><strong>类别：</strong>${escapeHtml(r.category||'—')}</div>
-            <div><strong>状态：</strong>${(r.status||'').includes('未闭环') ? '🔴 未闭环' : '🟢 已闭环'}</div>
+            <div><strong>状态：</strong>${isUnclosed(r.status) ? '🔴 未闭环' : '🟢 已闭环'}</div>
             <div><strong>事业部：</strong>${escapeHtml(r.bizUnit||'—')}</div>
             <div><strong>经营单位：</strong>${escapeHtml(r.company||'—')}</div>
             <div><strong>进出口：</strong>${escapeHtml(r.importExport||'—')}</div>
@@ -3307,7 +3332,7 @@ function renderTableBody() {
         showToast('记录未找到，请刷新页面');
         return;
       }
-      const isCurrentlyClosed = !(record.status || '').includes('未闭环');
+      const isCurrentlyClosed = !isUnclosed(record.status);
       const newStatus = isCurrentlyClosed ? '未闭环' : '已闭环';
       // Confirmation dialog
       const company = record.company || '—';
@@ -3367,7 +3392,7 @@ function switchYear(year) {
   selectedDim = null;
   batchSelected.clear();
   document.getElementById('detailPanel').classList.remove('show');
-  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
+  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '' };
   abnormalSort = { field: 'date', asc: false };
   renderAll();
 }

@@ -1378,7 +1378,7 @@ def export_text_report():
         SELECT * FROM abnormal_records
         WHERE year = '2026' AND deleted = 0
           AND category LIKE '%查验%'
-          AND (date = ? OR status = '未闭环')
+          AND (date = ? OR status IN ('未闭环', '未关闭'))
         ORDER BY date, seq
     """, (target_date,)).fetchall()
 
@@ -1386,7 +1386,7 @@ def export_text_report():
     abnormal_records = db.execute("""
         SELECT * FROM abnormal_records
         WHERE year = '2026' AND deleted = 0
-          AND status = '未闭环'
+          AND status IN ('未闭环', '未关闭')
           AND category NOT LIKE '%查验%'
         ORDER BY date, seq
     """).fetchall()
