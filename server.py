@@ -1689,13 +1689,14 @@ def release_dimension_item(record_id):
 
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     new_released = (record['totalReleased'] or 0) + 1
+    new_review = max(0, (record['reviewCompleted'] or 0) - 1)
 
     db.execute("""
         UPDATE daily_records SET
-            unclearedReason = ?, totalReleased = ?,
+            unclearedReason = ?, totalReleased = ?, reviewCompleted = ?,
             updated_at = ?, source = 'manual'
         WHERE id = ?
-    """, (new_reason, new_released, now, record_id))
+    """, (new_reason, new_released, new_review, now, record_id))
     db.commit()
 
     log_operation(
@@ -1741,9 +1742,10 @@ def transfer_dimension_item(record_id):
         new_reason = remove_item_from_reason(old_reason, dim_name, item_text)
 
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    new_review = max(0, (record['reviewCompleted'] or 0) - 1)
     db.execute("""
-        UPDATE daily_records SET unclearedReason = ?, updated_at = ? WHERE id = ?
-    """, (new_reason, now, record_id))
+        UPDATE daily_records SET unclearedReason = ?, reviewCompleted = ?, updated_at = ? WHERE id = ?
+    """, (new_reason, new_review, now, record_id))
 
     # Create abnormal record
     rid = str(uuid.uuid4())
