@@ -3268,6 +3268,7 @@ function renderAbnormalTable(data) {
   if (records.length > 0) {
     const dupCounts = {};
     records.forEach(r => {
+      if (!isUnclosed(r.status)) return;
       const cn = (r.customsNo || '').trim();
       if (cn) dupCounts[cn] = (dupCounts[cn] || 0) + 1;
     });
@@ -3408,6 +3409,7 @@ function showRiskSummary() {
   // Build duplicate map from all abnormalRecords
   const dupMap = {};
   abnormalRecords.forEach(r => {
+    if (!isUnclosed(r.status)) return;
     const cn = (r.customsNo || '').trim();
     if (!cn) return;
     if (!dupMap[cn]) dupMap[cn] = [];
