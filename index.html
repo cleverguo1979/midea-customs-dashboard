@@ -256,7 +256,7 @@
     overflow: hidden; margin-bottom: 28px;
   }
   .table-wrap { overflow-x: auto; max-height: 680px; overflow-y: auto; }
-  .data-table { width: 100%; border-collapse: collapse; min-width: 1240px; table-layout: fixed; }
+  .data-table { width: 100%; border-collapse: collapse; min-width: 1160px; table-layout: fixed; }
   .data-table th {
     text-align: left; padding: 8px 10px; font-size: 12px; font-weight: 600;
     color: var(--text-secondary); letter-spacing: 0.3px;
@@ -372,11 +372,10 @@
   .status-toggle { cursor: pointer; display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; transition: all 0.15s; }
   .status-toggle:hover { opacity: 0.8; transform: scale(1.05); }
 
-  /* Risk indicator */
-  .risk-badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-  .risk-badge.risk-safe { background: #e2f2e8; color: #1b8c3c; }
-  .risk-badge.risk-duplicate { background: #fde8e8; color: #c41515; cursor: pointer; transition: all 0.15s; }
-  .risk-badge.risk-duplicate:hover { background: #fcc; transform: scale(1.05); }
+  /* Risk summary badge */
+  .risk-summary-safe { background: #e8e8ed; color: #aeaeb2; }
+  .risk-summary-warn { background: #fde8e8; color: #c41515; cursor: pointer; transition: all 0.15s; }
+  .risk-summary-warn:hover { background: #fcc; transform: scale(1.03); }
 
   /* Follow-up notes timeline */
   .timeline { position: relative; padding-left: 20px; }
@@ -842,6 +841,7 @@
   <div class="section-header">
     <span class="section-title">📋 异常跟踪表</span>
     <span class="section-badge" id="abnormalCount">共 0 条</span>
+    <span class="section-badge" id="riskSummary" style="display:none;cursor:pointer;margin-left:8px" onclick="showRiskSummary()" title="点击查看重复报关单详情"></span>
   </div>
   <div class="table-card">
     <div class="summary-bar" id="summaryBar"></div>
@@ -3263,12 +3263,36 @@ function renderAbnormalTable(data) {
   const records = (data && data.abnormalRecords) ? data.abnormalRecords : [];
   document.getElementById('abnormalCount').textContent = `共 ${records.length} 条`;
 
+  // Risk summary badge
+  const riskSummary = document.getElementById('riskSummary');
+  if (records.length > 0) {
+    const dupCounts = {};
+    records.forEach(r => {
+      const cn = (r.customsNo || '').trim();
+      if (cn) dupCounts[cn] = (dupCounts[cn] || 0) + 1;
+    });
+    const dupCNs = Object.entries(dupCounts).filter(([cn, c]) => c >= 2);
+    if (dupCNs.length > 0) {
+      riskSummary.style.display = 'inline-block';
+      riskSummary.className = 'section-badge risk-summary-warn';
+      riskSummary.textContent = '⚠️ ' + dupCNs.length + ' 个报关单号重复';
+    } else {
+      riskSummary.style.display = 'inline-block';
+      riskSummary.className = 'section-badge risk-summary-safe';
+      riskSummary.textContent = '✅ 无重复风险';
+      riskSummary.style.cursor = 'default';
+      riskSummary.onclick = null;
+    }
+  } else {
+    riskSummary.style.display = 'none';
+  }
+
   // Summary bar
   if (records.length === 0) {
     document.getElementById('summaryBar').innerHTML = '<span style="color:var(--text-secondary);font-size:13px;">暂无异常记录</span>';
     document.getElementById('filterBar').innerHTML = '';
     document.getElementById('abnormalTableHead').innerHTML = '';
-    document.getElementById('abnormalTableBody').innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text-secondary);">暂无数据，请上传 Excel 报表</td></tr>';
+    document.getElementById('abnormalTableBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text-secondary);">暂无数据，请上传 Excel 报表</td></tr>';
     return;
   }
 
@@ -3352,17 +3376,8 @@ function renderAbnormalTable(data) {
     { key: 'responsible', label: '责任方', width: '78px' },
     { key: 'description', label: '异常描述', width: '142px' },
     { key: 'status', label: '闭环情况', width: '68px' },
-    { key: 'risk', label: '风险', width: '78px' },
     { key: 'action', label: '操作', width: '90px' }
   ];
-
-  // Build customsNo duplicate map for risk detection
-  const customsNoCount = {};
-  records.forEach(r => {
-    const cn = (r.customsNo || '').trim();
-    if (cn) customsNoCount[cn] = (customsNoCount[cn] || 0) + 1;
-  });
-  window._customsNoCount = customsNoCount;  // accessible from renderTableBody
 
   document.getElementById('abnormalTableHead').innerHTML = columns.map(col => {
     if (col.key === 'checkbox') {
@@ -3387,25 +3402,37 @@ function renderAbnormalTable(data) {
   }
 }
 
-function showRiskDetail(customsNo, dupCount) {
-  // Find all records with the same customsNo
-  const dupRecords = abnormalRecords.filter(r => (r.customsNo || '').trim() === customsNo);
-  if (dupRecords.length <= 1) return;
+function showRiskSummary() {
+  // Build duplicate map from all abnormalRecords
+  const dupMap = {};
+  abnormalRecords.forEach(r => {
+    const cn = (r.customsNo || '').trim();
+    if (!cn) return;
+    if (!dupMap[cn]) dupMap[cn] = [];
+    dupMap[cn].push(r);
+  });
+  const dupEntries = Object.entries(dupMap).filter(([cn, recs]) => recs.length >= 2).sort((a, b) => b[1].length - a[1].length);
+  if (dupEntries.length === 0) return;
 
-  const lines = dupRecords.map((r, i) => {
-    const statusIcon = isUnclosed(r.status) ? '🔴' : '🟢';
-    return `<div style="margin-bottom:8px;padding:8px 12px;background:rgba(245,245,247,0.8);border-radius:8px;font-size:13px">
-      <b>${i + 1}.</b> ${statusIcon} <b>${escapeHtml(r.company||'—')}</b> · ${fmtDate(r.date)} · ${escapeHtml(r.bolNo||'—')}
-      <br><span style="color:var(--text-secondary);font-size:12px">${escapeHtml((r.description||'').substring(0,60))}${(r.description||'').length > 60 ? '...' : ''}</span>
+  const sections = dupEntries.map(([cn, recs]) => {
+    const rows = recs.map((r, i) => {
+      const statusIcon = isUnclosed(r.status) ? '🔴' : '🟢';
+      return `<div style="padding:6px 0;font-size:13px;border-bottom:1px solid #f0f0f2">
+        ${statusIcon} <b>${escapeHtml(r.company||'—')}</b> · ${fmtDate(r.date)} · ${escapeHtml(r.bolNo||'—')} · ${escapeHtml((r.description||'').substring(0,40))}${(r.description||'').length > 40 ? '...' : ''}
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:16px;background:rgba(255,245,245,0.8);border-radius:12px;padding:12px 16px;border-left:3px solid var(--red)">
+      <div style="font-weight:700;margin-bottom:6px;font-family:var(--font-mono);font-size:13px">${escapeHtml(cn)} <span style="color:var(--red)">(${recs.length}条)</span></div>
+      ${rows}
     </div>`;
   }).join('');
 
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.35);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center';
-  modal.innerHTML = `<div style="background:#fff;border-radius:20px;width:560px;max-width:94vw;max-height:80vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.2)">
+  modal.innerHTML = `<div style="background:#fff;border-radius:20px;width:640px;max-width:94vw;max-height:82vh;overflow-y:auto;box-shadow:0 25px 60px rgba(0,0,0,0.2)">
     <div style="padding:20px 24px 0"><h3 style="font-size:16px;font-weight:700">⚠️ 报关单号重复风险</h3>
-    <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">报关单号 <b style="font-family:var(--font-mono)">${escapeHtml(customsNo)}</b> 共有 <b style="color:var(--red)">${dupRecords.length}</b> 条异常记录</p></div>
-    <div style="padding:16px 24px">${lines}</div>
+    <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">共 <b style="color:var(--red)">${dupEntries.length}</b> 个报关单号存在重复，涉及 <b>${dupEntries.reduce((s,e) => s + e[1].length, 0)}</b> 条记录</p></div>
+    <div style="padding:12px 24px 20px">${sections}</div>
     <div style="padding:0 24px 20px;display:flex;justify-content:flex-end">
       <button onclick="this.closest('[style*=fixed]').remove()" style="padding:8px 18px;font-size:13px;font-weight:600;border:none;border-radius:10px;background:#e8e8ed;cursor:pointer">关闭</button>
     </div>
@@ -3474,7 +3501,7 @@ function renderTableBody() {
   const hasIds = records.every(r => r.id);
 
   if (records.length === 0) {
-    document.getElementById('abnormalTableBody').innerHTML = '<tr><td colspan="14" style="text-align:center;padding:40px;color:var(--text-secondary);">无匹配记录</td></tr>';
+    document.getElementById('abnormalTableBody').innerHTML = '<tr><td colspan="12" style="text-align:center;padding:40px;color:var(--text-secondary);">无匹配记录</td></tr>';
   } else {
     document.getElementById('abnormalTableBody').innerHTML = records.map((r, i) => {
         const catBadgeClass = (r.category||'').includes('查验') ? 'badge-cat-inspect' :
@@ -3487,15 +3514,6 @@ function renderTableBody() {
         const checked = batchSelected.has(recordId) ? ' checked' : '';
         const hasNotes = (r.follow_up_notes && Array.isArray(r.follow_up_notes) && r.follow_up_notes.length > 0);
         const noteCount = hasNotes ? r.follow_up_notes.length : 0;
-
-        // Risk detection
-        const customsNo = (r.customsNo || '').trim();
-        const dupCount = customsNo ? ((window._customsNoCount || {})[customsNo] || 1) - 1 : 0;
-        const riskHtml = !customsNo
-          ? '<span style="color:#aeaeb2;font-size:11px">—</span>'
-          : dupCount > 0
-            ? `<span class="risk-badge risk-duplicate" onclick="showRiskDetail('${escapeHtml(customsNo)}',${dupCount})" title="点击查看重复记录">⚠️ 有风险</span>`
-            : '<span class="risk-badge risk-safe">✅ 无风险</span>';
 
         return `<tr id="abRow${i}">
           <td style="text-align:center"><input type="checkbox" class="row-checkbox row-cb" data-id="${escapeHtml(recordId)}" data-idx="${i}" ${checked}></td>
@@ -3510,7 +3528,6 @@ function renderTableBody() {
           <td>${r.responsible||'—'}</td>
           <td style="overflow:hidden;text-overflow:ellipsis;max-width:140px" title="${escapeHtml(r.description||'')}">${r.description||'—'}</td>
           <td>${statusBadge}</td>
-          <td style="text-align:center">${riskHtml}</td>
           <td>
             <div class="action-btns">
               <button class="expand-btn" onclick="toggleRowDetail(${i},this)">展开</button>
@@ -3520,7 +3537,7 @@ function renderTableBody() {
           </td>
         </tr>
         <tr id="abDetail${i}" style="display:none">
-          <td colspan="14"><div class="expand-detail" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 24px;font-size:13px;line-height:1.8">
+          <td colspan="13"><div class="expand-detail" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 24px;font-size:13px;line-height:1.8">
             <div><strong>日期：</strong>${escapeHtml(fmtDate(r.date))}</div>
             <div><strong>类别：</strong>${escapeHtml(r.category||'—')}</div>
             <div><strong>状态：</strong>${isUnclosed(r.status) ? '🔴 未闭环' : '🟢 已闭环'}</div>
