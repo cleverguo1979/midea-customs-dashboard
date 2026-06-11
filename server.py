@@ -1182,18 +1182,30 @@ def export_report():
     for i, record in enumerate(daily_rows):
         row_num = 3 + i
         date_str = record['date']
+        # Strip trailing time component if present (e.g. '2026-01-04 00:00:00')
+        if ' ' in date_str:
+            date_str = date_str.split(' ')[0]
         try:
             dt = datetime.strptime(date_str, '%Y-%m-%d')
             serial = (dt - datetime(1899, 12, 30)).days
         except (ValueError, TypeError):
             serial = date_str
 
+        # Clean up unclearedReason: replace tabs with spaces, normalize whitespace
+        raw_reason = (record['unclearedReason'] or '').strip()
+        if raw_reason:
+            raw_reason = raw_reason.replace('\t', ' ').replace('\xa0', ' ')
+            # Collapse multiple spaces but preserve newlines
+            raw_reason = '\n'.join(
+                ' '.join(line.split()) for line in raw_reason.split('\n')
+            )
+
         values = [
             serial,
             record['totalDeclared'] or 0,
             record['totalReleased'] or 0,
             record['reviewCompleted'] or 0,
-            (record['unclearedReason'] or '').strip() or '无'
+            raw_reason or '无'
         ]
 
         for col, val in enumerate(values, 1):
@@ -1258,6 +1270,9 @@ def export_report():
     for i, record in enumerate(abnormal_rows):
         row_num = 2 + i
         date_str = record['date']
+        # Strip trailing time component if present (e.g. '2026-01-04 00:00:00')
+        if ' ' in date_str:
+            date_str = date_str.split(' ')[0]
         try:
             dt = datetime.strptime(date_str, '%Y-%m-%d')
             serial = (dt - datetime(1899, 12, 30)).days
