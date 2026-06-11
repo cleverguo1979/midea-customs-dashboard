@@ -3352,7 +3352,7 @@ function renderAbnormalTable(data) {
     { key: 'responsible', label: '责任方', width: '78px' },
     { key: 'description', label: '异常描述', width: '142px' },
     { key: 'status', label: '闭环情况', width: '68px' },
-    { key: 'risk', label: '🔍 风险', width: '78px' },
+    { key: 'risk', label: '风险', width: '78px' },
     { key: 'action', label: '操作', width: '90px' }
   ];
 
@@ -3363,7 +3363,6 @@ function renderAbnormalTable(data) {
     if (cn) customsNoCount[cn] = (customsNoCount[cn] || 0) + 1;
   });
   window._customsNoCount = customsNoCount;  // accessible from renderTableBody
-  console.log('[风险检测] 共检测 ' + Object.keys(customsNoCount).length + ' 个报关单号，其中 ' + Object.values(customsNoCount).filter(c => c > 1).length + ' 个有重复');
 
   document.getElementById('abnormalTableHead').innerHTML = columns.map(col => {
     if (col.key === 'checkbox') {
