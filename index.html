@@ -3276,12 +3276,14 @@ function renderAbnormalTable(data) {
       riskSummary.style.display = 'inline-block';
       riskSummary.className = 'section-badge risk-summary-warn';
       riskSummary.textContent = '⚠️ ' + dupCNs.length + ' 个报关单号重复';
+      riskSummary.style.cursor = 'pointer';
+      riskSummary.setAttribute('onclick', 'showRiskSummary()');
     } else {
       riskSummary.style.display = 'inline-block';
       riskSummary.className = 'section-badge risk-summary-safe';
       riskSummary.textContent = '✅ 无重复风险';
       riskSummary.style.cursor = 'default';
-      riskSummary.onclick = null;
+      riskSummary.removeAttribute('onclick');
     }
   } else {
     riskSummary.style.display = 'none';
