@@ -1669,8 +1669,23 @@ def release_dimension_item(record_id):
     item_text = str(data['item']).strip()
     dim_name = str(data['dimension']).strip()
 
-    # Remove the specific item from the unclearedReason text
-    new_reason = remove_item_from_reason(old_reason, dim_name, item_text)
+    # Use structured approach to accurately rebuild the summary line
+    sections = _parse_uncleared_sections(old_reason)
+    items = sections.get(dim_name, [])
+    # Remove the matching item (try exact match first, then partial)
+    removed = False
+    new_items = []
+    for it in items:
+        if not removed and (item_text in it or it.startswith(item_text.split()[0] if item_text.split() else item_text)):
+            removed = True
+            continue
+        new_items.append(it)
+    if removed:
+        sections[dim_name] = new_items
+        new_reason = _rebuild_uncleared_text(sections)
+    else:
+        # Fallback to old text-based removal
+        new_reason = remove_item_from_reason(old_reason, dim_name, item_text)
 
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     new_released = (record['totalReleased'] or 0) + 1
@@ -1709,8 +1724,21 @@ def transfer_dimension_item(record_id):
     item_text = str(data['item']).strip()
     dim_name = str(data['dimension']).strip()
 
-    # Remove from unclearedReason
-    new_reason = remove_item_from_reason(old_reason, dim_name, item_text)
+    # Use structured approach to accurately rebuild the summary line
+    sections = _parse_uncleared_sections(old_reason)
+    items = sections.get(dim_name, [])
+    removed = False
+    new_items = []
+    for it in items:
+        if not removed and (item_text in it or it.startswith(item_text.split()[0] if item_text.split() else item_text)):
+            removed = True
+            continue
+        new_items.append(it)
+    if removed:
+        sections[dim_name] = new_items
+        new_reason = _rebuild_uncleared_text(sections)
+    else:
+        new_reason = remove_item_from_reason(old_reason, dim_name, item_text)
 
     now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
     db.execute("""
