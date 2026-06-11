@@ -288,14 +288,6 @@
   .summary-dot { width: 8px; height: 8px; border-radius: 50%; }
   .summary-num { font-weight: 700; font-family: var(--font-mono); }
 
-  /* Risk Pill — same style as section-badge */
-  .risk-pill {
-    font-size: 13px; font-weight: 500; padding: 4px 12px; border-radius: 20px;
-    cursor: pointer; transition: all 0.2s; letter-spacing: -0.2px;
-    vertical-align: middle;
-  }
-  .risk-pill:hover { opacity: 0.8; }
-
   /* Footer */
   .footer { text-align: center; padding: 20px; font-size: 12px; color: #aeaeb2; border-top: 1px solid var(--separator); margin-top: 40px; }
 
@@ -794,18 +786,6 @@
   </div>
 </div>
 
-<!-- Risk Detail Modal -->
-<div class="modal-overlay" id="riskModal">
-  <div class="modal-box" style="max-width:440px">
-    <h3>⚠️ 重复报关单风险</h3>
-    <div class="modal-desc">以下报关单号存在多条异常记录，建议重点关注</div>
-    <div class="modal-body" id="riskModalBody" style="max-height:320px;overflow-y:auto"></div>
-    <div class="modal-actions">
-      <button class="btn-sm ghost" onclick="closeRiskModal()">关闭</button>
-    </div>
-  </div>
-</div>
-
 <div class="main" id="mainContent">
   <!-- Data Status -->
   <div class="data-status" id="dataStatus">
@@ -856,7 +836,6 @@
   <div class="section-header">
     <span class="section-title">📋 异常跟踪表</span>
     <span class="section-badge" id="abnormalCount">共 0 条</span>
-    <span class="risk-pill" id="riskPill" style="background:#e8e8ed;color:var(--text-secondary)">无风险</span>
   </div>
   <div class="table-card">
     <div class="summary-bar" id="summaryBar"></div>
@@ -919,8 +898,8 @@ let currentYear = '2026';
 let monthlyChart = null, bizUnitChart = null, categoryChart = null;
 let selectedDim = null;
 let abnormalRecords = [];
-let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
-let abnormalSort = { field: 'seq', asc: false };
+let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '' };
+let abnormalSort = { field: 'date', asc: false };
 let apiKey = '';
 let aiCache = null;
 let batchSelected = new Set();
@@ -1276,9 +1255,6 @@ function bindEvents() {
   document.getElementById('btnDailySubmit').addEventListener('click', submitDailyRegister);
   document.getElementById('btnConfirmSave').addEventListener('click', confirmRegisterSave);
   document.getElementById('btnConfirmBack').addEventListener('click', confirmRegisterBack);
-
-  // Risk modal
-  document.getElementById('riskPill').addEventListener('click', openRiskModal);
   // dailyRegisterModal — no click-outside-to-close to prevent accidental loss of input data
   // Add uncleared item modal
   document.getElementById('btnAddUnclearedCancel').addEventListener('click', closeAddUnclearedModal);
@@ -1309,38 +1285,6 @@ function bindEvents() {
     btn.addEventListener('click', () => switchYear(btn.dataset.year));
   });
 }
-
-function openRiskModal() {
-  const data = document.getElementById('riskPill')._data;
-  if (!data) return;
-  const { dupCustoms, customsNoSeqs } = data;
-  document.getElementById('riskModalBody').innerHTML = `
-    <table style="width:100%;border-collapse:collapse;font-size:13px;font-family:var(--font)">
-      <thead><tr style="color:var(--text-secondary);font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px">
-        <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--separator)">报关单号</th>
-        <th style="text-align:center;padding:6px 0;border-bottom:1px solid var(--separator)">次数</th>
-        <th style="text-align:left;padding:6px 0;border-bottom:1px solid var(--separator)">涉及序号</th>
-      </tr></thead>
-      <tbody>${dupCustoms.map(([cno,c]) => `
-        <tr style="border-bottom:1px solid #f5f5f7">
-          <td style="padding:8px 0;font-family:var(--font-mono);font-size:13px;font-weight:500">${escapeHtml(cno)}</td>
-          <td style="text-align:center;padding:8px 0"><span style="display:inline-block;background:rgba(255,59,48,0.1);color:var(--red);border-radius:10px;padding:1px 8px;font-size:12px;font-weight:600">${c}</span></td>
-          <td style="padding:8px 0;font-family:var(--font-mono);font-size:12px;color:var(--text-secondary)">${customsNoSeqs[cno].join(', ')}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
-  document.getElementById('riskModal').classList.add('show');
-}
-function closeRiskModal() {
-  document.getElementById('riskModal').classList.remove('show');
-}
-// Click outside risk modal to close
-document.addEventListener('click', function(e) {
-  const modal = document.getElementById('riskModal');
-  if (modal.classList.contains('show') && e.target === modal) {
-    closeRiskModal();
-  }
-});
 
 function openSettings() {
   document.getElementById('apiKeyInput').value = apiKey;
@@ -2031,8 +1975,8 @@ async function executeClear() {
       currentYear = '2026';
       selectedDim = null;
       abnormalRecords = [];
-      abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
-      abnormalSort = { field: 'seq', asc: false };
+      abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '' };
+      abnormalSort = { field: 'date', asc: false };
       batchSelected.clear();
       document.getElementById('detailPanel').classList.remove('show');
       renderAll();
@@ -3346,34 +3290,6 @@ function renderAbnormalTable(data) {
   const topBUs = Object.entries(bizUnits).sort((a,b) => b[1] - a[1]).slice(0, 5);
   const colors = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5ac8fa'];
 
-  // Duplicate customsNo risk detection
-  const customsNoCount = {};
-  const customsNoSeqs = {};
-  records.forEach(r => {
-    const cno = (r.customsNo || '').trim();
-    if (cno && cno !== '未申报' && cno !== '—') {
-      customsNoCount[cno] = (customsNoCount[cno] || 0) + 1;
-      if (!customsNoSeqs[cno]) customsNoSeqs[cno] = [];
-      customsNoSeqs[cno].push(r.seq);
-    }
-  });
-  const dupCustoms = Object.entries(customsNoCount).filter(([,c]) => c >= 2).sort((a,b) => b[1] - a[1]);
-
-  // Risk pill button
-  const riskPill = document.getElementById('riskPill');
-  const riskTotal = dupCustoms.reduce((s,[,c]) => s + c, 0);
-  if (dupCustoms.length > 0) {
-    riskPill.style.background = 'rgba(255,59,48,0.1)';
-    riskPill.style.color = 'var(--red)';
-    riskPill.innerHTML = `⚠️ 风险 ${dupCustoms.length} 项`;
-    riskPill._data = { dupCustoms, customsNoSeqs };
-  } else {
-    riskPill.style.background = '#e8e8ed';
-    riskPill.style.color = 'var(--text-secondary)';
-    riskPill.innerHTML = '无风险';
-    riskPill._data = null;
-  }
-
   document.getElementById('summaryBar').innerHTML = `
     <div class="summary-item"><span class="summary-dot" style="background:var(--green)"></span>已闭环 <span class="summary-num">${closedCount}</span></div>
     <div class="summary-item"><span class="summary-dot" style="background:var(--red)"></span>未闭环 <span class="summary-num">${openCount}</span></div>
@@ -3656,8 +3572,8 @@ function switchYear(year) {
   selectedDim = null;
   batchSelected.clear();
   document.getElementById('detailPanel').classList.remove('show');
-  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
-  abnormalSort = { field: 'seq', asc: false };
+  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '' };
+  abnormalSort = { field: 'date', asc: false };
   renderAll();
 }
 

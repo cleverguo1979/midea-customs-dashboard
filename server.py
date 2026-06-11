@@ -456,6 +456,7 @@ def get_current_data():
         abnormal_rows = db.execute(
             "SELECT * FROM abnormal_records WHERE year = ? AND deleted = 0"
             " AND (date != '' AND date IS NOT NULL)"
+            " AND (company != '' AND company IS NOT NULL)"
             " ORDER BY seq", (year,)
         ).fetchall()
 
@@ -1379,10 +1380,16 @@ def export_report():
     ws_abnormal.auto_filter.filterColumn = ()
 
     # Also scrub autoFilter XML element if it lingers
-    for ws in (ws_daily, ws_abnormal):
-        ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
-        for af in ws._ws.findall(f'{{{ns}}}autoFilter'):
-            ws._ws.remove(af)
+    # (openpyxl < 3.1 uses _ws internal attribute; newer versions dont need this)
+    try:
+        for ws in (ws_daily, ws_abnormal):
+            if not hasattr(ws, "_ws"):
+                continue
+            ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+            for af in ws._ws.findall(f'{{{ns}}}autoFilter'):
+                ws._ws.remove(af)
+    except Exception:
+        pass  # XML scrub is optional; ref=None + filterColumn=() already done above
 
     # ============================================================
     # Remove 2025 sheets and Sheet3 (only keep 2026 sheets)
