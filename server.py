@@ -970,25 +970,27 @@ def create_daily_record():
                 }), 409
 
     if existing:
-        # === Accumulate (叠加) instead of overwrite ===
-        total_declared = (existing['totalDeclared'] or 0) + new_declared
-        total_released = (existing['totalReleased'] or 0) + new_released
-        total_review = (existing['reviewCompleted'] or 0) + new_review
+        # === Overwrite (覆盖) — filled fields overwrite, empty/zero fields keep existing ===
+        total_declared = new_declared if new_declared > 0 else (existing['totalDeclared'] or 0)
+        total_released = new_released if new_released > 0 else (existing['totalReleased'] or 0)
+        total_review = new_review if new_review > 0 else (existing['reviewCompleted'] or 0)
 
-        # Merge unclearedReason: append new items to existing sections
-        existing_reason = existing['unclearedReason'] or ''
-        merged_reason = _merge_uncleared_reason(existing_reason, new_reason)
+        # unclearedReason: if provided, overwrite; otherwise keep existing
+        if new_reason:
+            final_reason = new_reason
+        else:
+            final_reason = existing['unclearedReason'] or ''
 
         db.execute("""
             UPDATE daily_records SET
                 totalDeclared = ?, totalReleased = ?, reviewCompleted = ?,
                 unclearedReason = ?, updated_at = ?, source = 'manual'
             WHERE id = ?
-        """, (total_declared, total_released, total_review, merged_reason, now, existing['id']))
+        """, (total_declared, total_released, total_review, final_reason, now, existing['id']))
         db.commit()
         log_operation(
             action='update_daily', record_type='daily', record_id=existing['id'],
-            record_summary=f'叠加日报: {rec_date} (+{new_declared}申报/+{new_released}放行/+{new_review}审结)',
+            record_summary=f'刷新日报: {rec_date} (申报={total_declared}/放行={total_released}/审结={total_review})',
             changes=data,
             operator=get_operator()
         )

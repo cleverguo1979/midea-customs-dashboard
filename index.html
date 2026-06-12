@@ -660,7 +660,7 @@
 <div class="form-modal-overlay" id="dailyRegisterModal">
   <div class="form-modal-box" style="width:640px">
     <h3>📊 登记今日业务量</h3>
-    <div class="form-desc">每次登记为追加批次，数值累加、明细合并；同提单号不可重复录入</div>
+    <div class="form-desc">每次登记覆盖当天数据，留空的字段保留原值不变；同提单号不可重复录入</div>
     <div class="form-body">
       <div class="form-row single">
         <div class="form-group"><label>日期 *</label><input type="date" id="dailyDate"></div>
@@ -688,7 +688,7 @@
     <!-- Confirm preview area (hidden initially) -->
     <div class="register-confirm" id="registerConfirm" style="display:none;padding:0 24px 16px">
       <div style="background:#f0f4ff;border-radius:10px;padding:14px;margin-bottom:12px">
-        <div style="font-weight:600;font-size:14px;margin-bottom:8px">📋 未放行明细预览 — 确认后将追加到当日记录</div>
+        <div style="font-weight:600;font-size:14px;margin-bottom:8px">📋 未放行明细预览 — 确认后将覆盖当日记录</div>
         <div id="registerConfirmPreview" style="font-size:13px;max-height:200px;overflow-y:auto"></div>
       </div>
     </div>
@@ -1805,7 +1805,7 @@ async function submitDailyRegister() {
       if (d.count === 0) return '';
       const items = d.items.map(it => `<span style="font-family:monospace">${escapeHtml(it.id)}</span> ${escapeHtml(it.reason)}`).join('<br>');
       return `<div style="margin-bottom:8px"><b>${d.emoji} ${d.key} ×${d.count}</b><br><span style="color:#555">${items}</span></div>`;
-    }).filter(Boolean).join('') + `<div style="border-top:1px solid #d1d1d6;margin-top:8px;padding-top:8px;font-weight:600">共 <b>${total}</b> 条未放行条目待追加</div>`;
+    }).filter(Boolean).join('') + `<div style="border-top:1px solid #d1d1d6;margin-top:8px;padding-top:8px;font-weight:600">共 <b>${total}</b> 条未放行条目，保存后将覆盖当日记录</div>`;
     document.getElementById('registerConfirm').style.display = 'block';
     document.getElementById('formActionsNormal').style.display = 'none';
     document.getElementById('formActionsConfirm').style.display = '';
@@ -1848,7 +1848,7 @@ async function doSubmitDailyRegister(date, declared, released, reviewCompleted, 
     });
     const result = await res.json();
     if (result.success) {
-      showToast('✅ 业务量已' + (result.action === 'updated' ? '叠加' : '登记'));
+      showToast('✅ 业务量已' + (result.action === 'updated' ? '刷新' : '登记'));
       closeDailyRegisterModal();
       await fetchCloudData();
       renderAll();
