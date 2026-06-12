@@ -1304,7 +1304,7 @@ function bindEvents() {
   // Operator name
   document.getElementById('operatorName').addEventListener('click', changeOperatorName);
 
-  document.querySelectorAll('.year-btn').forEach(btn => {
+  document.querySelectorAll('.year-btn[data-year]').forEach(btn => {
     btn.addEventListener('click', () => switchYear(btn.dataset.year));
   });
 }
@@ -2110,7 +2110,7 @@ async function handleFileUpload(e) {
   const years = Object.keys(appData).filter(y => appData[y] && appData[y].dailyData && appData[y].dailyData.length > 0).sort();
   if (years.length > 0) {
     currentYear = years[years.length - 1];
-    document.querySelectorAll('.year-btn').forEach(b =>
+    document.querySelectorAll('.year-btn[data-year]').forEach(b =>
       b.classList.toggle('active', b.dataset.year === currentYear)
     );
   }
@@ -3785,7 +3785,7 @@ function escapeHtml(str) {
 // ==================== YEAR SWITCH ====================
 function switchYear(year) {
   currentYear = year;
-  document.querySelectorAll('.year-btn').forEach(b => b.classList.toggle('active', b.dataset.year === year));
+  document.querySelectorAll('.year-btn[data-year]').forEach(b => b.classList.toggle('active', b.dataset.year === year));
   selectedDim = null;
   batchSelected.clear();
   document.getElementById('detailPanel').classList.remove('show');
