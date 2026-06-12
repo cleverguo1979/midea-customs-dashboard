@@ -824,7 +824,7 @@
           <span style="font-size:13px;color:var(--text-secondary)">选择月份：</span>
           <select class="filter-select" id="chartMonthSelect" onchange="onChartMonthChange()" style="padding:6px 10px;font-size:13px"></select>
         </div>
-        <div id="chartDailyTable" style="overflow-x:auto"></div>
+        <div class="chart-wrap" style="height:300px"><canvas id="chartDaily"></canvas></div>
         <div id="chartDailyEmpty" style="display:none;text-align:center;padding:40px;color:#c7c7cc;font-size:14px">该月暂无业务量数据</div>
       </div>
     </div>
@@ -917,7 +917,7 @@ Chart.defaults.plugins.datalabels = { display: false };
 const DATA_VERSION = 4;
 let appData = { '2025': null, '2026': null };
 let currentYear = '2026';
-let monthlyChart = null, bizUnitChart = null, categoryChart = null;
+let monthlyChart = null, dailyChart = null, bizUnitChart = null, categoryChart = null;
 let currentChartView = 'monthly', currentChartMonth = new Date().getMonth() + 1;
 let selectedDim = null;
 let abnormalRecords = [];
@@ -2444,21 +2444,21 @@ function updateChartViewVisibility() {
 
 function onChartMonthChange() {
   currentChartMonth = parseInt(document.getElementById('chartMonthSelect').value);
-  renderDailyTable();
+  renderDailyChart();
 }
 
-function renderDailyTable() {
+function renderDailyChart() {
   const data = appData[currentYear];
+  if (dailyChart) { dailyChart.destroy(); dailyChart = null; }
+
   if (!data || !data.dailyData) { showDailyEmpty(); return; }
 
   // Filter records for selected month
   const monthRecords = data.dailyData.filter(d => d.year === currentYear && d.month === currentChartMonth);
-  // Sort by day ascending
   monthRecords.sort((a, b) => (a.day || 0) - (b.day || 0));
 
   // Populate month selector
   const select = document.getElementById('chartMonthSelect');
-  const prev = select.value;
   select.innerHTML = '';
   for (let m = 1; m <= 12; m++) {
     const opt = document.createElement('option');
@@ -2467,71 +2467,73 @@ function renderDailyTable() {
     if (m === currentChartMonth) opt.selected = true;
     select.appendChild(opt);
   }
-  if (prev) select.value = prev;
 
-  const tableDiv = document.getElementById('chartDailyTable');
   const emptyDiv = document.getElementById('chartDailyEmpty');
-
   if (monthRecords.length === 0) {
-    tableDiv.innerHTML = '';
-    emptyDiv.style.display = '';
+    showDailyEmpty();
     return;
   }
   emptyDiv.style.display = 'none';
 
-  // Build summary line for unclearedReason
-  function summaryReason(r) {
-    if (!r || r === '无') return '—';
-    // Extract the count line like "5票审结未放行"
-    const m = r.match(/^(\d+)票/);
-    if (m) return m[0] + '未放行';
-    const lines = r.split('\n').filter(l => l.trim());
-    if (lines.length > 1) return lines.length + '个维度有未放行';
-    return r.substring(0, 20) + (r.length > 20 ? '…' : '');
-  }
+  // Build labels (day numbers) and data arrays
+  const labels = monthRecords.map(r => (r.day || '?') + '日');
+  const declaredData = monthRecords.map(r => r.totalDeclared || 0);
+  const releasedData = monthRecords.map(r => r.totalReleased || 0);
 
-  const totalDeclared = monthRecords.reduce((s, r) => s + (r.totalDeclared || 0), 0);
-  const totalReleased = monthRecords.reduce((s, r) => s + (r.totalReleased || 0), 0);
-  const totalReview = monthRecords.reduce((s, r) => s + (r.reviewCompleted || 0), 0);
+  const canvas = document.getElementById('chartDaily');
+  if (!canvas) return;
+  // Ensure canvas is fresh
+  const parent = canvas.parentNode;
+  canvas.remove();
+  const newCanvas = document.createElement('canvas');
+  newCanvas.id = 'chartDaily';
+  parent.appendChild(newCanvas);
 
-  let html = '<table class="data-table" style="width:100%"><thead><tr>' +
-    '<th style="width:80px">日期</th>' +
-    '<th style="width:110px;text-align:right">应申报总单量</th>' +
-    '<th style="width:100px;text-align:right">已放行单量</th>' +
-    '<th style="width:100px;text-align:right">审结未放行数</th>' +
-    '<th>未放行明细</th>' +
-    '</tr></thead><tbody>';
-
-  monthRecords.forEach(r => {
-    const dateStr = r.date || '';
-    const declared = (r.totalDeclared || 0).toLocaleString();
-    const released = (r.totalReleased || 0).toLocaleString();
-    const review = (r.reviewCompleted || 0).toLocaleString();
-    const summary = summaryReason(r.unclearedReason);
-    html += `<tr>
-      <td>${dateStr}</td>
-      <td style="text-align:right">${declared}</td>
-      <td style="text-align:right">${released}</td>
-      <td style="text-align:right">${review}</td>
-      <td style="font-size:12px;color:var(--text-secondary)">${summary}</td>
-    </tr>`;
+  dailyChart = new Chart(newCanvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: '应申报总单量', data: declaredData,
+          backgroundColor: 'rgba(255,149,0,0.75)', borderRadius: 6, borderSkipped: false,
+          datalabels: {
+            display: true,
+            anchor: 'end', align: 'top', offset: 2,
+            color: '#ff9500', font: { size: 11, weight: '600' },
+            formatter: function(v) { return v > 0 ? v.toLocaleString() : ''; }
+          }
+        },
+        {
+          label: '已放行单量', data: releasedData,
+          backgroundColor: 'rgba(0,199,190,0.75)', borderRadius: 6, borderSkipped: false,
+          datalabels: {
+            display: true,
+            anchor: 'end', align: 'top', offset: 2,
+            color: '#007a73', font: { size: 11, weight: '600' },
+            formatter: function(v) { return v > 0 ? v.toLocaleString() : ''; }
+          }
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 28 } },
+      plugins: {
+        legend: { position: 'top', labels: { usePointStyle: true, padding: 20, font: { size: 12 } } },
+        tooltip: { backgroundColor: '#1d1d1f', cornerRadius: 8, padding: 12 }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: { grid: { color: '#f0f0f2' }, ticks: { font: { size: 11 } }, grace: '10%' }
+      }
+    },
+    plugins: [ChartDataLabels]
   });
-
-  // Total row
-  html += `<tr style="border-top:2px solid #e5e5ea;font-weight:600;background:#f9f9fb">
-    <td>本月合计</td>
-    <td style="text-align:right">${totalDeclared.toLocaleString()}</td>
-    <td style="text-align:right">${totalReleased.toLocaleString()}</td>
-    <td style="text-align:right">${totalReview.toLocaleString()}</td>
-    <td></td>
-  </tr>`;
-
-  html += '</tbody></table>';
-  tableDiv.innerHTML = html;
 }
 
 function showDailyEmpty() {
-  document.getElementById('chartDailyTable').innerHTML = '';
+  if (dailyChart) { dailyChart.destroy(); dailyChart = null; }
   document.getElementById('chartDailyEmpty').style.display = '';
 }
 
@@ -2552,7 +2554,7 @@ function renderCharts(data) {
   document.getElementById('chartMonthlyEmpty').style.display = 'none';
 
   if (currentChartView === 'daily') {
-    renderDailyTable();
+    renderDailyChart();
     return;
   }
 
