@@ -666,13 +666,13 @@
         <div class="form-group"><label>日期 *</label><input type="date" id="dailyDate"></div>
       </div>
       <div class="form-row single">
-        <div class="form-group"><label>应申报总单量</label><input type="number" id="dailyDeclared" value="0" min="0" placeholder="当日应申报的总单量"></div>
+        <div class="form-group"><label>应申报总单量</label><input type="number" id="dailyDeclared" min="0" placeholder="留空不更新，填0则清零"></div>
       </div>
       <div class="form-row single">
-        <div class="form-group"><label>审结未放行数</label><input type="number" id="dailyReview" value="0" min="0" placeholder="海关已审结但尚未放行的单量"></div>
+        <div class="form-group"><label>审结未放行数</label><input type="number" id="dailyReview" min="0" placeholder="留空不更新，填0则清零"></div>
       </div>
       <div class="form-row single">
-        <div class="form-group"><label>已放行单量</label><input type="number" id="dailyReleased" value="0" min="0" placeholder="当日实际已放行的单量"></div>
+        <div class="form-group"><label>已放行单量</label><input type="number" id="dailyReleased" min="0" placeholder="留空不更新，填0则清零"></div>
       </div>
       <!-- Collapsible uncleared detail section -->
       <div class="uncleared-toggle" id="unclearedToggle" onclick="toggleUnclearedSection()">
@@ -1758,7 +1758,7 @@ function openDailyRegisterModal() {
   document.getElementById('dailyDate').value = today;
   document.getElementById('dailyDeclared').value = '';
   document.getElementById('dailyReleased').value = '';
-  document.getElementById('dailyReview').value = '0';
+  document.getElementById('dailyReview').value = '';
   document.getElementById('unclearedPaste').value = '';
   document.getElementById('unclearedPreview').innerHTML = '';
   document.getElementById('unclearedSection').style.display = 'none';
@@ -1782,10 +1782,18 @@ function closeDailyRegisterModal() {
 
 let pendingRegisterData = null;  // Holds form data during confirmation step
 
+// Parse optional numeric field: empty → null (keep existing), '0' → 0, else → number
+function parseOptionalNum(val) {
+  const v = val.trim();
+  if (v === '') return null;
+  const n = parseInt(v, 10);
+  return isNaN(n) ? null : n;
+}
+
 async function submitDailyRegister() {
   const date = document.getElementById('dailyDate').value;
-  const declared = parseInt(document.getElementById('dailyDeclared').value) || 0;
-  const released = parseInt(document.getElementById('dailyReleased').value) || 0;
+  const declared = parseOptionalNum(document.getElementById('dailyDeclared').value);
+  const released = parseOptionalNum(document.getElementById('dailyReleased').value);
   if (!date) {
     showToast('请填写日期');
     return;
@@ -1813,7 +1821,7 @@ async function submitDailyRegister() {
     // Store form data for later submission
     pendingRegisterData = {
       date, declared, released,
-      reviewCompleted: parseInt(document.getElementById('dailyReview').value) || 0,
+      reviewCompleted: parseOptionalNum(document.getElementById('dailyReview').value),
       unclearedReason: unclearedRaw
     };
     return;
@@ -1821,7 +1829,7 @@ async function submitDailyRegister() {
 
   // No uncleared detail — submit directly
   await doSubmitDailyRegister(date, declared, released,
-    parseInt(document.getElementById('dailyReview').value) || 0, '');
+    parseOptionalNum(document.getElementById('dailyReview').value), '');
 }
 
 async function doSubmitDailyRegister(date, declared, released, reviewCompleted, unclearedReason) {

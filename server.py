@@ -935,9 +935,9 @@ def create_daily_record():
     year = rec_date[:4]
 
     new_reason = str(data.get('unclearedReason', '')).strip()
-    new_declared = data.get('totalDeclared', 0)
-    new_released = data.get('totalReleased', 0)
-    new_review = data.get('reviewCompleted', 0)
+    new_declared = data.get('totalDeclared')
+    new_released = data.get('totalReleased')
+    new_review = data.get('reviewCompleted')
 
     # Check if date already exists (needed early for duplicate check exclusion)
     existing = db.execute(
@@ -970,10 +970,10 @@ def create_daily_record():
                 }), 409
 
     if existing:
-        # === Overwrite (覆盖) — filled fields overwrite, empty/zero fields keep existing ===
-        total_declared = new_declared if new_declared > 0 else (existing['totalDeclared'] or 0)
-        total_released = new_released if new_released > 0 else (existing['totalReleased'] or 0)
-        total_review = new_review if new_review > 0 else (existing['reviewCompleted'] or 0)
+        # === Overwrite (覆盖) — filled fields (including 0) overwrite, null fields keep existing ===
+        total_declared = new_declared if new_declared is not None else (existing['totalDeclared'] or 0)
+        total_released = new_released if new_released is not None else (existing['totalReleased'] or 0)
+        total_review = new_review if new_review is not None else (existing['reviewCompleted'] or 0)
 
         # unclearedReason: if provided, overwrite; otherwise keep existing
         if new_reason:
@@ -996,7 +996,7 @@ def create_daily_record():
         )
         return jsonify({'success': True, 'id': existing['id'], 'action': 'updated'})
 
-    # Create new
+    # Create new — null fields default to 0 for a fresh record
     rid = str(uuid.uuid4())
     dt = datetime.strptime(rec_date, '%Y-%m-%d') if len(rec_date) == 10 else datetime.now()
     db.execute("""
@@ -1006,7 +1006,9 @@ def create_daily_record():
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual')
     """, (
         rid, rec_date, year, dt.month, dt.day,
-        new_declared, new_released, new_review,
+        new_declared if new_declared is not None else 0,
+        new_released if new_released is not None else 0,
+        new_review if new_review is not None else 0,
         new_reason if new_reason else '',
         now, now
     ))
