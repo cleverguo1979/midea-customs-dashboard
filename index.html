@@ -2435,8 +2435,11 @@ function switchChartView(view) {
 function updateChartViewVisibility() {
   const isMonthly = currentChartView === 'monthly';
   document.getElementById('chartMonthlyWrap').style.display = isMonthly ? '' : 'none';
-  document.getElementById('chartMonthlyEmpty').style.display = isMonthly ? '' : 'none';
   document.getElementById('chartDailyWrap').style.display = isMonthly ? 'none' : '';
+  // In daily view, explicitly hide monthly empty overlay so it doesn't cover the table
+  if (!isMonthly) {
+    document.getElementById('chartMonthlyEmpty').style.display = 'none';
+  }
 }
 
 function onChartMonthChange() {
