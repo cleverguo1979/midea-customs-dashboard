@@ -528,6 +528,12 @@ def index():
 def static_files(filename):
     if filename.startswith('api/'):
         return jsonify({'error': 'Not found'}), 404
+    filepath = os.path.join(BASE_DIR, filename)
+    # Directory → serve index.html inside it
+    if os.path.isdir(filepath):
+        index_path = os.path.join(filename, 'index.html')
+        if os.path.isfile(os.path.join(BASE_DIR, index_path)):
+            return send_from_directory(BASE_DIR, index_path)
     return send_from_directory(BASE_DIR, filename)
 
 
@@ -2160,6 +2166,6 @@ migrate_from_json()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8888))
-    print(f"🚀 美的项目客服看板 v2 启动在端口 {port}")
-    print(f"   数据库: {DB_FILE}")
+    print(f"美的关务看板 v2 启动在端口 {port}")
+    print(f"数据库: {DB_FILE}")
     app.run(host='0.0.0.0', port=port, debug=False)
