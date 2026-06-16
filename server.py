@@ -1486,14 +1486,14 @@ def export_text_report():
         if m:
             review_completed = int(m.group(1))
 
-    # 2. Inspection records: today's 查验 + all ongoing 查验 (未闭环)
+    # 2. Inspection records: all ongoing 查验 (未闭环) — 已闭环的不导出
     inspection_records = db.execute("""
         SELECT * FROM abnormal_records
         WHERE year = '2026' AND deleted = 0
           AND category LIKE '%查验%'
-          AND (date = ? OR status IN ('未闭环', '未关闭'))
+          AND status = '未闭环'
         ORDER BY date, seq
-    """, (target_date,)).fetchall()
+    """).fetchall()
 
     # 3. All unresolved (未闭环) records, excluding those with 查验 category
     abnormal_records = db.execute("""
