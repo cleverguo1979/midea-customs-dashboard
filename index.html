@@ -3528,7 +3528,7 @@ function renderAbnormalTable(data) {
     return true;
   });
   const unclosedCount = statusBase.filter(r => isUnclosed(r.status)).length;
-  const closedCount = statusBase.filter(r => r.status && r.status.includes('已闭环')).length;
+  const statusClosedCount = statusBase.filter(r => r.status && r.status.includes('已闭环')).length;
 
   document.getElementById('filterBar').innerHTML = `
     <input type="text" class="filter-input" id="filterKeyword" placeholder="🔍 搜索报关单号/提运单号/描述..." value="${abnormalFilters.keyword}" autocomplete="off">
@@ -3542,7 +3542,7 @@ function renderAbnormalTable(data) {
     </select>
     <select class="filter-select" id="filterStatus" autocomplete="off">
       <option value="">全部状态 (${records.length})</option>
-      <option value="已闭环"${abnormalFilters.status==='已闭环'?' selected':''}>已闭环 (${closedCount})</option>
+      <option value="已闭环"${abnormalFilters.status==='已闭环'?' selected':''}>已闭环 (${statusClosedCount})</option>
       <option value="未闭环"${abnormalFilters.status==='未闭环'?' selected':''}>未闭环 (${unclosedCount})</option>
     </select>
     <select class="filter-select" id="filterResponsible" autocomplete="off">
