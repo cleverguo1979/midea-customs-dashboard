@@ -23,8 +23,6 @@
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
   }
-
-  /* Nav */
   .nav {
     position: sticky; top: 0; z-index: 100;
     background: rgba(245,245,247,0.82);
@@ -35,16 +33,11 @@
     display: flex; align-items: center; justify-content: space-between;
   }
   .nav-sub { font-size: 13px; color: var(--text-secondary); }
-
-  .main { max-width: 1200px; margin: 0 auto; padding: 48px 40px; }
-
-  /* Hero */
+  .main { max-width: 1400px; margin: 0 auto; padding: 48px 40px; }
   .hero { text-align: center; margin-bottom: 56px; }
   .hero h1 { font-size: 36px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 12px; }
   .hero p { font-size: 17px; color: var(--text-secondary); line-height: 1.6; }
-
-  /* Cards Grid */
-  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px; }
   .card {
     background: var(--card-bg);
     backdrop-filter: blur(20px);
@@ -60,27 +53,30 @@
     cursor: pointer;
   }
   .card:hover { transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.1); }
-
   .card-icon { font-size: 40px; margin-bottom: 20px; }
   .card-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; letter-spacing: -0.3px; }
-  .card-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
+  .card-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.6; flex: 1; }
   .card-tag {
-    display: inline-block; margin-top: auto; padding: 4px 12px;
+    display: inline-block; margin-top: 16px; padding: 4px 12px;
     font-size: 11px; font-weight: 600; color: var(--accent);
     background: rgba(0,113,227,0.08); border-radius: 20px;
     align-self: flex-start;
   }
   .card.coming-soon { opacity: 0.5; pointer-events: none; }
   .card.coming-soon .card-tag { color: #8e8e93; background: rgba(142,142,147,0.12); }
-
-  /* Footer */
   .footer { text-align: center; margin-top: 64px; padding: 24px; color: var(--text-secondary); font-size: 12px; }
 
+  @media (max-width: 1200px) {
+    .cards { grid-template-columns: repeat(3, 1fr); }
+  }
   @media (max-width: 768px) {
-    .nav { padding: 0 20px; }
+    .cards { grid-template-columns: repeat(2, 1fr); }
     .main { padding: 32px 20px; }
     .hero h1 { font-size: 28px; }
+  }
+  @media (max-width: 500px) {
     .cards { grid-template-columns: 1fr; }
+    .nav { padding: 0 20px; }
   }
 </style>
 </head>
@@ -99,7 +95,6 @@
 
   <div class="cards">
 
-    <!-- 客服看板 -->
     <a href="https://board.cleverguo.cn" class="card">
       <div class="card-icon">📊</div>
       <div class="card-title">项目客服看板</div>
@@ -107,19 +102,31 @@
       <span class="card-tag">已上线</span>
     </a>
 
-    <!-- 大船排期 -->
     <a href="https://ship.cleverguo.cn" class="card">
-      <div class="card-icon">🚢</div>
-      <div class="card-title">大船排期计划</div>
-      <div class="card-desc">出口排船、台账管理。</div>
+      <div class="card-icon">📋</div>
+      <div class="card-title">美的跟单功能模块</div>
+      <div class="card-desc">出口跟单、台账管理、制单跟踪。</div>
       <span class="card-tag">已上线</span>
     </a>
 
-    <!-- 账单制作 -->
     <a href="/billing" class="card">
-      <div class="card-icon">📋</div>
+      <div class="card-icon">🧾</div>
       <div class="card-title">账单制作</div>
       <div class="card-desc">制作每月账单，自动匹配报价、计算费用。</div>
+      <span class="card-tag">已上线</span>
+    </a>
+
+    <a href="/weekly" class="card">
+      <div class="card-icon">📝</div>
+      <div class="card-title">产品部周报系统</div>
+      <div class="card-desc">AI 智能生成周报、工作重点追踪、部门全局分析与个人评估。</div>
+      <span class="card-tag">已上线</span>
+    </a>
+
+    <a href="/cangdan" class="card">
+      <div class="card-icon">📦</div>
+      <div class="card-title">舱单自动生成</div>
+      <div class="card-desc">上传报关资料，一键生成舱单复核件。支持批量压缩包和多格式文件。</div>
       <span class="card-tag">已上线</span>
     </a>
 
