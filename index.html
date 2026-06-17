@@ -915,7 +915,7 @@ let monthlyChart = null, dailyChart = null, bizUnitChart = null, categoryChart =
 let currentChartView = 'monthly', currentChartMonth = new Date().getMonth() + 1;
 let selectedDim = null;
 let abnormalRecords = [];
-let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
+let abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环', responsible: '' };
 let abnormalSort = { field: 'date', asc: false };
 let apiKey = '';
 let aiCache = null;
@@ -3477,6 +3477,7 @@ function renderAbnormalTable(data) {
   // Filter bar
   const uniqueBizUnits = [...new Set(records.map(r => r.bizUnit).filter(Boolean))].sort();
   const uniqueCategories = [...new Set(records.map(r => r.category).filter(Boolean))].sort();
+  const uniqueResponsibles = [...new Set(records.map(r => r.responsible).filter(Boolean))].sort();
 
   document.getElementById('filterBar').innerHTML = `
     <input type="text" class="filter-input" id="filterKeyword" placeholder="🔍 搜索报关单号/提运单号/描述..." value="${abnormalFilters.keyword}" autocomplete="off">
@@ -3493,12 +3494,17 @@ function renderAbnormalTable(data) {
       <option value="已闭环"${abnormalFilters.status==='已闭环'?' selected':''}>已闭环</option>
       <option value="未闭环"${abnormalFilters.status==='未闭环'?' selected':''}>未闭环</option>
     </select>
+    <select class="filter-select" id="filterResponsible" autocomplete="off">
+      <option value="">全部责任方</option>
+      ${uniqueResponsibles.map(r => `<option value="${r}"${abnormalFilters.responsible===r?' selected':''}>${r}</option>`).join('')}
+    </select>
   `;
 
   document.getElementById('filterKeyword').addEventListener('input', applyFilters);
   document.getElementById('filterBizUnit').addEventListener('change', applyFilters);
   document.getElementById('filterCategory').addEventListener('change', applyFilters);
   document.getElementById('filterStatus').addEventListener('change', applyFilters);
+  document.getElementById('filterResponsible').addEventListener('change', applyFilters);
 
   // Defensive: ensure filter stays in sync, beating any browser form restoration
   document.getElementById('filterStatus').value = abnormalFilters.status;
@@ -3591,6 +3597,7 @@ function applyFilters() {
   abnormalFilters.bizUnit = document.getElementById('filterBizUnit').value;
   abnormalFilters.category = document.getElementById('filterCategory').value;
   abnormalFilters.status = document.getElementById('filterStatus').value;
+  abnormalFilters.responsible = document.getElementById('filterResponsible').value;
   renderTableBody();
 }
 
@@ -3617,13 +3624,14 @@ function renderTableBody() {
   }
   if (abnormalFilters.bizUnit) records = records.filter(r => r.bizUnit === abnormalFilters.bizUnit);
   if (abnormalFilters.category) records = records.filter(r => r.category === abnormalFilters.category);
-	  if (abnormalFilters.status) {
+  if (abnormalFilters.responsible) records = records.filter(r => r.responsible === abnormalFilters.responsible);
+  if (abnormalFilters.status) {
 	    records = records.filter(r => abnormalFilters.status === '未闭环' ? isUnclosed(r.status) : r.status && r.status.includes(abnormalFilters.status));
 	  }
 	  // Update count display: show filtered vs total
 	  const totalCount = abnormalRecords.length;
 	  const filteredCount = records.length;
-	  const hasActiveFilter = abnormalFilters.keyword || abnormalFilters.bizUnit || abnormalFilters.category || abnormalFilters.status;
+	  const hasActiveFilter = abnormalFilters.keyword || abnormalFilters.bizUnit || abnormalFilters.category || abnormalFilters.status || abnormalFilters.responsible;
 	  if (hasActiveFilter && filteredCount !== totalCount) {
 	    document.getElementById('abnormalCount').textContent = `共 ${filteredCount} / ${totalCount} 条（已筛选）`;
 	  } else {
@@ -3785,7 +3793,7 @@ function switchYear(year) {
   selectedDim = null;
   batchSelected.clear();
   document.getElementById('detailPanel').classList.remove('show');
-  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环' };
+  abnormalFilters = { keyword: '', bizUnit: '', category: '', status: '未闭环', responsible: '' };
   renderAll();
 }
 
