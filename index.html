@@ -65,6 +65,10 @@
   .year-switch { display: flex; background: rgba(255,255,255,0.12); border-radius: 8px; overflow: hidden; }
   .year-btn { padding: 5px 14px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; background: transparent; color: rgba(255,255,255,0.72); transition: all 0.15s; }
   .year-btn.active { background: rgba(255,255,255,0.20); color: #ffffff; border-radius: 6px; margin: 2px; }
+  /* Chart view switch — light variant for white card backgrounds */
+  #chartViewSwitch { background: #e8e8ed; }
+  #chartViewSwitch .year-btn { color: var(--text-secondary); padding: 5px 16px; font-size: 13px; }
+  #chartViewSwitch .year-btn.active { background: #fff; color: var(--text); box-shadow: var(--shadow-sm); }
   .btn-upload {
     display: flex; align-items: center; gap: 5px;
     padding: 6px 15px; font-size: 12px; font-weight: 500;
