@@ -528,6 +528,12 @@ def index():
 def static_files(filename):
     if filename.startswith('api/'):
         return jsonify({'error': 'Not found'}), 404
+    filepath = os.path.join(BASE_DIR, filename)
+    # Directory → serve index.html inside it
+    if os.path.isdir(filepath):
+        index_path = os.path.join(filename, 'index.html')
+        if os.path.isfile(os.path.join(BASE_DIR, index_path)):
+            return send_from_directory(BASE_DIR, index_path)
     return send_from_directory(BASE_DIR, filename)
 
 
@@ -1486,14 +1492,14 @@ def export_text_report():
         if m:
             review_completed = int(m.group(1))
 
-    # 2. Inspection records: today's 查验 + all ongoing 查验 (未闭环)
+    # 2. Inspection records: all ongoing 查验 (未闭环) — 已闭环的不导出
     inspection_records = db.execute("""
         SELECT * FROM abnormal_records
         WHERE year = '2026' AND deleted = 0
           AND category LIKE '%查验%'
-          AND (date = ? OR status IN ('未闭环', '未关闭'))
+          AND status = '未闭环'
         ORDER BY date, seq
-    """, (target_date,)).fetchall()
+    """).fetchall()
 
     # 3. All unresolved (未闭环) records, excluding those with 查验 category
     abnormal_records = db.execute("""
@@ -2160,6 +2166,6 @@ migrate_from_json()
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8888))
-    print(f"🚀 美的项目客服看板 v2 启动在端口 {port}")
-    print(f"   数据库: {DB_FILE}")
+    print(f"美的关务看板 v2 启动在端口 {port}")
+    print(f"数据库: {DB_FILE}")
     app.run(host='0.0.0.0', port=port, debug=False)
