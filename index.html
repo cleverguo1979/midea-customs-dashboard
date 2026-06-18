@@ -3413,6 +3413,83 @@ function closeDetail() {
 }
 
 // ==================== ABNORMAL TABLE ====================
+function renderFilterBar() {
+  const records = abnormalRecords;
+  // Filter bar (dynamic counts re-rendered on dropdown change)
+  const uniqueBizUnits = [...new Set(records.map(r => r.bizUnit).filter(Boolean))].sort();
+  const uniqueCategories = [...new Set(records.map(r => r.category).filter(Boolean))].sort();
+  const uniqueResponsibles = [...new Set(records.map(r => r.responsible).filter(Boolean))].sort();
+
+  // Dynamic counts per filter option, respecting other active filters
+  function getFieldCounts(field) {
+    let base = abnormalRecords;
+    const filterKeys = ['keyword','bizUnit','category','status','responsible'];
+    for (const key of filterKeys) {
+      if (key === field || !abnormalFilters[key]) continue;
+      if (key === 'keyword') {
+        const kw = abnormalFilters.keyword.toLowerCase();
+        base = base.filter(r =>
+          (r.customsNo||'').toLowerCase().includes(kw) || (r.bolNo||'').toLowerCase().includes(kw) ||
+          (r.description||'').toLowerCase().includes(kw) || (r.company||'').toLowerCase().includes(kw)
+        );
+      } else if (key === 'status') {
+        base = base.filter(r => abnormalFilters.status === '未闭环' ? isUnclosed(r.status) : r.status && r.status.includes(abnormalFilters.status));
+      } else {
+        base = base.filter(r => (r[key]||'') === abnormalFilters[key]);
+      }
+    }
+    const counts = {};
+    base.forEach(r => { const v = r[field] || ''; if (v) counts[v] = (counts[v]||0) + 1; });
+    return counts;
+  }
+  const bizUnitCounts = getFieldCounts('bizUnit');
+  const categoryCounts = getFieldCounts('category');
+  const responsibleCounts = getFieldCounts('responsible');
+  // Status counts — apply all filters except status
+  const statusBase = records.filter(r => {
+    if (abnormalFilters.keyword) {
+      const kw = abnormalFilters.keyword.toLowerCase();
+      if (!((r.customsNo||'').toLowerCase().includes(kw) || (r.bolNo||'').toLowerCase().includes(kw) ||
+        (r.description||'').toLowerCase().includes(kw) || (r.company||'').toLowerCase().includes(kw))) return false;
+    }
+    if (abnormalFilters.bizUnit && r.bizUnit !== abnormalFilters.bizUnit) return false;
+    if (abnormalFilters.category && r.category !== abnormalFilters.category) return false;
+    if (abnormalFilters.responsible && r.responsible !== abnormalFilters.responsible) return false;
+    return true;
+  });
+  const unclosedCount = statusBase.filter(r => isUnclosed(r.status)).length;
+  const statusClosedCount = statusBase.filter(r => r.status && r.status.includes('已闭环')).length;
+
+  document.getElementById('filterBar').innerHTML = `
+    <input type="text" class="filter-input" id="filterKeyword" placeholder="🔍 搜索报关单号/提运单号/描述..." value="${abnormalFilters.keyword}" autocomplete="off">
+    <select class="filter-select" id="filterBizUnit" autocomplete="off">
+      <option value="">全部事业部 (${records.length})</option>
+      ${uniqueBizUnits.map(u => `<option value="${u}"${abnormalFilters.bizUnit===u?' selected':''}>${u} (${bizUnitCounts[u]||0})</option>`).join('')}
+    </select>
+    <select class="filter-select" id="filterCategory" autocomplete="off">
+      <option value="">全部异常类别 (${records.length})</option>
+      ${uniqueCategories.map(c => `<option value="${c}"${abnormalFilters.category===c?' selected':''}>${c} (${categoryCounts[c]||0})</option>`).join('')}
+    </select>
+    <select class="filter-select" id="filterStatus" autocomplete="off">
+      <option value="">全部状态 (${records.length})</option>
+      <option value="已闭环"${abnormalFilters.status==='已闭环'?' selected':''}>已闭环 (${statusClosedCount})</option>
+      <option value="未闭环"${abnormalFilters.status==='未闭环'?' selected':''}>未闭环 (${unclosedCount})</option>
+    </select>
+    <select class="filter-select" id="filterResponsible" autocomplete="off">
+      <option value="">全部责任方 (${records.length})</option>
+      ${uniqueResponsibles.map(r => `<option value="${r}"${abnormalFilters.responsible===r?' selected':''}>${r} (${responsibleCounts[r]||0})</option>`).join('')}
+    </select>
+  `;
+
+  document.getElementById('filterKeyword').addEventListener('input', applyFilters);
+  document.getElementById('filterBizUnit').addEventListener('change', applyFilters);
+  document.getElementById('filterCategory').addEventListener('change', applyFilters);
+  document.getElementById('filterStatus').addEventListener('change', applyFilters);
+  document.getElementById('filterResponsible').addEventListener('change', applyFilters);
+
+
+}
+
 function renderAbnormalTable(data) {
   const records = (data && data.abnormalRecords) ? data.abnormalRecords : [];
   document.getElementById('abnormalCount').textContent = `共 ${records.length} 条`;
@@ -3485,77 +3562,8 @@ function renderAbnormalTable(data) {
     ${topBUs.map(([k,v]) => `<div class="summary-item"><span class="summary-num">${k}:${v}</span></div>`).join('')}
   `;
 
-  // Filter bar
-  const uniqueBizUnits = [...new Set(records.map(r => r.bizUnit).filter(Boolean))].sort();
-  const uniqueCategories = [...new Set(records.map(r => r.category).filter(Boolean))].sort();
-  const uniqueResponsibles = [...new Set(records.map(r => r.responsible).filter(Boolean))].sort();
-
-  // Dynamic counts per filter option, respecting other active filters
-  function getFieldCounts(field) {
-    let base = records;
-    const filterKeys = ['keyword','bizUnit','category','status','responsible'];
-    for (const key of filterKeys) {
-      if (key === field || !abnormalFilters[key]) continue;
-      if (key === 'keyword') {
-        const kw = abnormalFilters.keyword.toLowerCase();
-        base = base.filter(r =>
-          (r.customsNo||'').toLowerCase().includes(kw) || (r.bolNo||'').toLowerCase().includes(kw) ||
-          (r.description||'').toLowerCase().includes(kw) || (r.company||'').toLowerCase().includes(kw)
-        );
-      } else if (key === 'status') {
-        base = base.filter(r => abnormalFilters.status === '未闭环' ? isUnclosed(r.status) : r.status && r.status.includes(abnormalFilters.status));
-      } else {
-        base = base.filter(r => (r[key]||'') === abnormalFilters[key]);
-      }
-    }
-    const counts = {};
-    base.forEach(r => { const v = r[field] || ''; if (v) counts[v] = (counts[v]||0) + 1; });
-    return counts;
-  }
-  const bizUnitCounts = getFieldCounts('bizUnit');
-  const categoryCounts = getFieldCounts('category');
-  const responsibleCounts = getFieldCounts('responsible');
-  // Status counts — apply all filters except status
-  const statusBase = records.filter(r => {
-    if (abnormalFilters.keyword) {
-      const kw = abnormalFilters.keyword.toLowerCase();
-      if (!((r.customsNo||'').toLowerCase().includes(kw) || (r.bolNo||'').toLowerCase().includes(kw) ||
-        (r.description||'').toLowerCase().includes(kw) || (r.company||'').toLowerCase().includes(kw))) return false;
-    }
-    if (abnormalFilters.bizUnit && r.bizUnit !== abnormalFilters.bizUnit) return false;
-    if (abnormalFilters.category && r.category !== abnormalFilters.category) return false;
-    if (abnormalFilters.responsible && r.responsible !== abnormalFilters.responsible) return false;
-    return true;
-  });
-  const unclosedCount = statusBase.filter(r => isUnclosed(r.status)).length;
-  const statusClosedCount = statusBase.filter(r => r.status && r.status.includes('已闭环')).length;
-
-  document.getElementById('filterBar').innerHTML = `
-    <input type="text" class="filter-input" id="filterKeyword" placeholder="🔍 搜索报关单号/提运单号/描述..." value="${abnormalFilters.keyword}" autocomplete="off">
-    <select class="filter-select" id="filterBizUnit" autocomplete="off">
-      <option value="">全部事业部 (${records.length})</option>
-      ${uniqueBizUnits.map(u => `<option value="${u}"${abnormalFilters.bizUnit===u?' selected':''}>${u} (${bizUnitCounts[u]||0})</option>`).join('')}
-    </select>
-    <select class="filter-select" id="filterCategory" autocomplete="off">
-      <option value="">全部异常类别 (${records.length})</option>
-      ${uniqueCategories.map(c => `<option value="${c}"${abnormalFilters.category===c?' selected':''}>${c} (${categoryCounts[c]||0})</option>`).join('')}
-    </select>
-    <select class="filter-select" id="filterStatus" autocomplete="off">
-      <option value="">全部状态 (${records.length})</option>
-      <option value="已闭环"${abnormalFilters.status==='已闭环'?' selected':''}>已闭环 (${statusClosedCount})</option>
-      <option value="未闭环"${abnormalFilters.status==='未闭环'?' selected':''}>未闭环 (${unclosedCount})</option>
-    </select>
-    <select class="filter-select" id="filterResponsible" autocomplete="off">
-      <option value="">全部责任方 (${records.length})</option>
-      ${uniqueResponsibles.map(r => `<option value="${r}"${abnormalFilters.responsible===r?' selected':''}>${r} (${responsibleCounts[r]||0})</option>`).join('')}
-    </select>
-  `;
-
-  document.getElementById('filterKeyword').addEventListener('input', applyFilters);
-  document.getElementById('filterBizUnit').addEventListener('change', applyFilters);
-  document.getElementById('filterCategory').addEventListener('change', applyFilters);
-  document.getElementById('filterStatus').addEventListener('change', applyFilters);
-  document.getElementById('filterResponsible').addEventListener('change', applyFilters);
+  // Filter bar -- dynamic counts, re-rendered on dropdown change
+  renderFilterBar();
 
   // Defensive: ensure filter stays in sync, beating any browser form restoration
   document.getElementById('filterStatus').value = abnormalFilters.status;
@@ -3643,12 +3651,16 @@ function showRiskSummary() {
   document.body.appendChild(modal);
 }
 
-function applyFilters() {
+function applyFilters(e) {
   abnormalFilters.keyword = document.getElementById('filterKeyword').value.trim();
   abnormalFilters.bizUnit = document.getElementById('filterBizUnit').value;
   abnormalFilters.category = document.getElementById('filterCategory').value;
   abnormalFilters.status = document.getElementById('filterStatus').value;
   abnormalFilters.responsible = document.getElementById('filterResponsible').value;
+  // Re-render filter bar counts when dropdowns change (skip on keyword keystrokes)
+  if (!e || e.type === 'change') {
+    renderFilterBar();
+  }
   renderTableBody();
 }
 
