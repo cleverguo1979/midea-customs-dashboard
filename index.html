@@ -169,9 +169,28 @@
   }
   .insight-header .insight-icon { font-size: 22px; }
   .insight-header h3 { font-size: 16px; font-weight: 700; letter-spacing: -0.2px; }
-  .insight-header .btn-ai-eval { margin-left: auto; padding: 8px 16px; font-size: 13px; font-weight: 600; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+  .insight-header .btn-ai-eval { padding: 8px 16px; font-size: 13px; font-weight: 600; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; border-radius: 10px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
   .insight-header .btn-ai-eval:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }
   .insight-header .btn-ai-eval:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+  .ai-eval-stats-badge {
+    font-size: 11px; font-weight: 600; color: var(--accent);
+    background: rgba(0,113,227,0.08); border-radius: 20px;
+    padding: 5px 12px; cursor: pointer; white-space: nowrap;
+    transition: all 0.2s; user-select: none;
+  }
+  .ai-eval-stats-badge:hover { background: rgba(0,113,227,0.15); }
+  .ai-eval-stats-popup {
+    display: none; position: fixed; z-index: 1000;
+    background: var(--card-bg); border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15); border: 1px solid var(--separator);
+    min-width: 240px; max-height: 260px; overflow-y: auto;
+    padding: 12px 16px;
+  }
+  .ai-eval-stats-popup.show { display: block; }
+  .ai-eval-stats-popup .popup-title { font-size: 12px; font-weight: 700; color: var(--text); margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--separator); }
+  .ai-eval-stats-popup .popup-item { font-size: 11px; color: var(--text-secondary); padding: 4px 0; display: flex; justify-content: space-between; }
+  .ai-eval-stats-popup .popup-empty { font-size: 11px; color: var(--text-secondary); text-align: center; padding: 12px 0; }
+  .ai-eval-stats-wrap { position: relative; margin-left: auto; display: flex; align-items: center; gap: 8px; }
   .insight-body { padding: 24px 28px 20px; }
   .insight-section { margin-bottom: 20px; }
   .insight-section:last-child { margin-bottom: 0; }
@@ -888,7 +907,11 @@
     <div class="insight-header">
       <span class="insight-icon">🤖</span>
       <h3>智能分析总结</h3>
-      <button class="btn-ai-eval" id="btnAiEval" title="AI 多维评估">🧠 AI 评估</button>
+      <div class="ai-eval-stats-wrap">
+        <button class="btn-ai-eval" id="btnAiEval" title="AI 多维评估">🧠 AI 评估</button>
+        <span class="ai-eval-stats-badge" id="aiEvalStatsBadge" title="点击查看今日 AI 评估使用详情" onclick="toggleAiEvalStats(event)">📊 …</span>
+        <div class="ai-eval-stats-popup" id="aiEvalStatsPopup"></div>
+      </div>
     </div>
     <div class="insight-body" id="insightBody"></div>
   </div>
@@ -994,6 +1017,14 @@ function saveTokens(aiKey) {
 const AI_API_KEY = 'sk-467150c472b344a69ded6844333d0457';
 
 async function runAiEvaluation() {
+  // Log click to server (fire and forget)
+  const operator = localStorage.getItem('operatorName') || '匿名';
+  fetch(API_SERVER + '/api/log-ai-eval', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ _operator: operator })
+  }).catch(() => {});
+
   const data = appData[currentYear];
   if (!data || !data.abnormalRecords || data.abnormalRecords.length === 0) {
     showToast('暂无数据，请先上传 Excel 报表');
@@ -1023,8 +1054,87 @@ async function runAiEvaluation() {
   } finally {
     btn.disabled = false;
     btn.textContent = '🧠 AI 评估';
+    // Refresh stats badge after click
+    loadAiEvalStats();
   }
 }
+
+// ==================== AI EVAL CLICK STATS ====================
+async function loadAiEvalStats() {
+  try {
+    const today = new Date().toISOString().substring(0, 10);
+    const res = await fetch(API_SERVER + '/api/ai-eval-stats?date=' + today);
+    const data = await res.json();
+    const badge = document.getElementById('aiEvalStatsBadge');
+    if (badge) {
+      if (data.count > 0) {
+        badge.innerHTML = '📊 今日 ' + data.count + ' 次';
+        badge.title = '点击查看今日 AI 评估使用详情（共' + data.count + '次）';
+      } else {
+        badge.innerHTML = '📊 今日 0 次';
+        badge.title = '今日暂无 AI 评估记录';
+      }
+    }
+    // Update popup if open
+    const popup = document.getElementById('aiEvalStatsPopup');
+    if (popup && popup.classList.contains('show')) {
+      renderAiEvalPopup(popup, data);
+    }
+    // Also store for next popup open
+    window._aiEvalCache = data;
+  } catch(e) {
+    // Ignore — stats are non-critical
+  }
+}
+
+function renderAiEvalPopup(popup, data) {
+  const clicks = data.clicks || [];
+  if (clicks.length === 0) {
+    popup.innerHTML = '<div class="popup-title">📊 今日 AI 评估记录</div><div class="popup-empty">暂无记录</div>';
+  } else {
+    popup.innerHTML = `
+      <div class="popup-title">📊 今日 AI 评估记录 · ${clicks.length} 次</div>
+      ${clicks.map((c, i) => `
+        <div class="popup-item">
+          <span>#${clicks.length - i}</span>
+          <span>${(c.timestamp || '').replace('T', ' ').substring(0, 16)}</span>
+          <span style="color:var(--accent)">${escapeHtml(c.operator || '匿名')}</span>
+        </div>
+      `).join('')}
+    `;
+  }
+}
+
+function toggleAiEvalStats(e) {
+  e.stopPropagation();
+  const popup = document.getElementById('aiEvalStatsPopup');
+  const badge = document.getElementById('aiEvalStatsBadge');
+  if (!popup) return;
+  const isOpen = popup.classList.contains('show');
+  if (isOpen) {
+    popup.classList.remove('show');
+  } else {
+    // Position popup relative to badge
+    const rect = badge.getBoundingClientRect();
+    popup.style.top = (rect.bottom + 4) + 'px';
+    popup.style.right = (window.innerWidth - rect.right) + 'px';
+    // Use cached data or fetch fresh
+    const data = window._aiEvalCache || { date: new Date().toISOString().substring(0,10), count: 0, clicks: [] };
+    renderAiEvalPopup(popup, data);
+    popup.classList.add('show');
+    // Refresh in background
+    loadAiEvalStats();
+  }
+}
+
+// Close popup on outside click
+document.addEventListener('click', function(e) {
+  const popup = document.getElementById('aiEvalStatsPopup');
+  const badge = document.getElementById('aiEvalStatsBadge');
+  if (popup && popup.classList.contains('show') && !popup.contains(e.target) && e.target !== badge) {
+    popup.classList.remove('show');
+  }
+});
 
 async function callAiEvaluation(data) {
   const records = data.abnormalRecords || [];
@@ -1188,6 +1298,7 @@ async function init() {
   renderAll();
   bindEvents();
   startPolling();
+  loadAiEvalStats(); // Load today's AI eval click count
 }
 
 function hasAppData() {
@@ -1750,7 +1861,9 @@ async function openRecordOpLog(recordId) {
       'create': '新增', 'update': '编辑', 'delete': '删除',
       'batch_update': '批量更新', 'add_note': '添加备注',
       'create_daily': '登记日报', 'update_daily': '更新日报',
-      'release_item': '放行', 'transfer_item': '转异常'
+      'release_item': '放行项目', 'transfer_item': '转异常记录',
+      'add_item': '添加未放行项目', 'ensure_daily': '确认日报',
+      'ai_eval': 'AI 评估'
     };
     document.getElementById('recordOpLogContent').innerHTML = `
       <table class="op-log-table">
@@ -2174,11 +2287,17 @@ async function openOpLog() {
       'create': '新增记录', 'update': '更新记录', 'delete': '删除记录',
       'batch_update': '批量更新', 'add_note': '添加备注', 'upload': '上传数据',
       'migrate': '数据迁移', 'clear': '清零数据',
-      'create_daily': '登记日报', 'update_daily': '更新日报'
+      'create_daily': '登记日报', 'update_daily': '更新日报',
+      'release_item': '放行项目', 'transfer_item': '转异常记录',
+      'add_item': '添加未放行项目', 'ensure_daily': '确认日报',
+      'ai_eval': 'AI 评估'
     };
     const actionClasses = {
       'create': 'create', 'delete': 'delete', 'update': 'update',
-      'batch_update': 'batch', 'clear': 'clear'
+      'batch_update': 'batch', 'clear': 'clear',
+      'release_item': 'create', 'transfer_item': 'update',
+      'add_item': 'update', 'ensure_daily': 'create',
+      'ai_eval': 'batch'
     };
     document.getElementById('opLogContent').innerHTML = `
       <table class="op-log-table">

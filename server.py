@@ -1115,6 +1115,40 @@ def get_operations():
     return jsonify([dict(r) for r in rows])
 
 
+@app.route('/api/log-ai-eval', methods=['POST'])
+def log_ai_eval():
+    """Log an AI evaluation button click."""
+    db = get_db()
+    op_id = str(uuid.uuid4())
+    now = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+    operator = get_operator()
+    db.execute("""
+        INSERT INTO operations (id, timestamp, action, record_type, record_summary, changes, operator)
+        VALUES (?, ?, 'ai_eval', 'ai_eval', 'AI 评估点击', '{}', ?)
+    """, (op_id, now, operator))
+    db.commit()
+    return jsonify({'ok': True, 'id': op_id, 'timestamp': now})
+
+
+@app.route('/api/ai-eval-stats', methods=['GET'])
+def get_ai_eval_stats():
+    """Get AI evaluation click stats. Query params: ?date=YYYY-MM-DD (default today)."""
+    date = request.args.get('date', '').strip()
+    if not date:
+        date = datetime.now().strftime('%Y-%m-%d')
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM operations WHERE action = 'ai_eval' AND timestamp LIKE ? ORDER BY timestamp DESC",
+        (date + '%',)
+    ).fetchall()
+    results = [dict(r) for r in rows]
+    return jsonify({
+        'date': date,
+        'count': len(results),
+        'clicks': results
+    })
+
+
 # ---------------- Export Report ----------------
 
 @app.route('/api/export-report', methods=['GET'])
